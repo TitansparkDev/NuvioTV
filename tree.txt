@@ -194,6 +194,7 @@ app/src/main/java/com/nuvio/tv/core/player/ExternalPlayerResultContract.kt
 app/src/main/java/com/nuvio/tv/core/player/FrameRateUtils.kt
 app/src/main/java/com/nuvio/tv/core/player/HevcDvRpuStripper.kt
 app/src/main/java/com/nuvio/tv/core/player/HevcHdr10PlusStripper.kt
+app/src/main/java/com/nuvio/tv/core/player/LetterboxRenderPolicy.kt
 app/src/main/java/com/nuvio/tv/core/player/LocalTrailerPlayerPool.kt
 app/src/main/java/com/nuvio/tv/core/player/MatroskaAfrProbe.kt
 app/src/main/java/com/nuvio/tv/core/player/OpenSubtitlesHasher.kt
@@ -236,6 +237,7 @@ app/src/main/java/com/nuvio/tv/core/server/RepositoryConfigServer.kt
 app/src/main/java/com/nuvio/tv/core/server/RepositoryWebPage.kt
 app/src/main/java/com/nuvio/tv/core/server/StreamBadgeConfigServer.kt
 app/src/main/java/com/nuvio/tv/core/server/StreamBadgeWebPage.kt
+app/src/main/java/com/nuvio/tv/core/streams/PlaybackAvailability.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgePresentation.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeRules.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeSettings.kt
@@ -433,6 +435,7 @@ app/src/main/java/com/nuvio/tv/data/simkl/SimklMutationBodies.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklMutationReceipt.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklMutationReconciliation.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklMutationService.kt
+app/src/main/java/com/nuvio/tv/data/simkl/SimklPlaybackMerge.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklPlaybackReconciliation.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklRefreshPolicy.kt
 app/src/main/java/com/nuvio/tv/data/simkl/SimklScrobbleReconciliation.kt
@@ -552,6 +555,7 @@ app/src/main/java/com/nuvio/tv/ui/components/NuvioTopBar.kt
 app/src/main/java/com/nuvio/tv/ui/components/P2pConsentDialog.kt
 app/src/main/java/com/nuvio/tv/ui/components/PlaceholderShimmer.kt
 app/src/main/java/com/nuvio/tv/ui/components/PlayManualOverrideDialog.kt
+app/src/main/java/com/nuvio/tv/ui/components/PlaybackAvailabilityProvider.kt
 app/src/main/java/com/nuvio/tv/ui/components/PosterCardDefaults.kt
 app/src/main/java/com/nuvio/tv/ui/components/ProfileAvatarCircle.kt
 app/src/main/java/com/nuvio/tv/ui/components/ProfileBackgroundPicker.kt
@@ -560,6 +564,9 @@ app/src/main/java/com/nuvio/tv/ui/components/RefreshFilterChip.kt
 app/src/main/java/com/nuvio/tv/ui/components/SidebarNavigation.kt
 app/src/main/java/com/nuvio/tv/ui/components/Skeletons.kt
 app/src/main/java/com/nuvio/tv/ui/components/SourceStatusFilterChip.kt
+app/src/main/java/com/nuvio/tv/ui/components/StartupLoadingPolicy.kt
+app/src/main/java/com/nuvio/tv/ui/components/StartupLoadingState.kt
+app/src/main/java/com/nuvio/tv/ui/components/StartupSplashScreen.kt
 app/src/main/java/com/nuvio/tv/ui/components/StreamBadgeChips.kt
 app/src/main/java/com/nuvio/tv/ui/components/Synopsis.kt
 app/src/main/java/com/nuvio/tv/ui/components/TrailerPlayer.kt
@@ -678,7 +685,6 @@ app/src/main/java/com/nuvio/tv/ui/screens/player/MpvHi10pFallback.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/NextEpisodeEndPromptOverlay.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/NuvioAssMatroskaExtractor.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/NuvioExoPlayerPerformanceHelper.kt
-app/src/main/java/com/nuvio/tv/ui/screens/player/NuvioMp4Extractor.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/NuvioMpvSurfaceView.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/ParallelRangeDataSource.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/ParallelRangeRetryAfter.kt
@@ -732,6 +738,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerStallWatchdogPolicy.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerStartupLoadingPolicy.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerStartupPlaybackPolicy.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerSubtitleCueParser.kt
+app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerSubtitleDataSource.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerSubtitleRtlFix.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerSubtitleUtils.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/PlayerUiState.kt
@@ -856,6 +863,7 @@ app/src/main/java/com/nuvio/tv/ui/util/LongPressKeyTracker.kt
 app/src/main/java/com/nuvio/tv/ui/util/RecompositionHighlighter.kt
 app/src/main/java/com/nuvio/tv/ui/util/RtlKeyUtils.kt
 app/src/main/java/com/nuvio/tv/ui/util/StableHolders.kt
+app/src/main/java/com/nuvio/tv/ui/util/TextDirectionUtils.kt
 app/src/main/java/com/nuvio/tv/ui/util/TypeLabelFormatter.kt
 app/src/main/java/com/nuvio/tv/updater/ReleaseSelector.kt
 app/src/main/java/com/nuvio/tv/updater/UpdateBannerPolicy.kt
@@ -877,6 +885,8 @@ app/src/main/res/drawable/ic_chevron_compact_left.png
 app/src/main/res/drawable/ic_launcher.png
 app/src/main/res/drawable/introdb_favicon.png
 app/src/main/res/drawable/mdblist_audience.png
+app/src/main/res/drawable/mdblist_audience_stale.png
+app/src/main/res/drawable/mdblist_audience_verified_hot.png
 app/src/main/res/drawable/mdblist_metacritic.png
 app/src/main/res/drawable/nuvio_text.png
 app/src/main/res/drawable/rating_tmdb.png
@@ -941,6 +951,8 @@ app/src/main/res/raw/mdblist_logo.svg
 app/src/main/res/raw/mdblist_mal.svg
 app/src/main/res/raw/mdblist_tmdb.svg
 app/src/main/res/raw/mdblist_tomatoes.svg
+app/src/main/res/raw/mdblist_tomatoes_certified.svg
+app/src/main/res/raw/mdblist_tomatoes_rotten.svg
 app/src/main/res/raw/mdblist_trakt.svg
 app/src/main/res/raw/nuvio_loading_indicator.json
 app/src/main/res/raw/sidebar_home.svg
@@ -1039,12 +1051,15 @@ app/src/test/java/com/nuvio/tv/core/player/FrameRateUtilsMp4PeekLoopTest.kt
 app/src/test/java/com/nuvio/tv/core/player/MatroskaAfrProbeTest.kt
 app/src/test/java/com/nuvio/tv/core/player/StreamAutoPlaySelectorTest.kt
 app/src/test/java/com/nuvio/tv/core/player/SubtitleCharsetDetectorTest.kt
+app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaNestedSeekHeadTest.kt
+app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaTruncatedTailTest.kt
 app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaZlibSampleDecompressorTest.kt
 app/src/test/java/com/nuvio/tv/core/plugin/PluginEpisodeRequestRulesTest.kt
 app/src/test/java/com/nuvio/tv/core/recommendations/ProgramBuilderTest.kt
 app/src/test/java/com/nuvio/tv/core/server/AddonConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/server/DebridFormatterConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/server/StreamBadgeConfigServerTest.kt
+app/src/test/java/com/nuvio/tv/core/streams/PlaybackAvailabilityTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSettingsSyncServiceTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSyncSupportTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/LibrarySyncServiceTest.kt
@@ -1083,12 +1098,14 @@ app/src/test/java/com/nuvio/tv/data/local/WatchedItemsPreferencesSyncTest.kt
 app/src/test/java/com/nuvio/tv/data/local/WatchedItemsPullPreservationTest.kt
 app/src/test/java/com/nuvio/tv/data/mapper/MetaMapperTest.kt
 app/src/test/java/com/nuvio/tv/data/remote/ServerDiscoveryPolicyTest.kt
+app/src/test/java/com/nuvio/tv/data/remote/dto/mdblist/MDBListMediaResponseDtoTest.kt
 app/src/test/java/com/nuvio/tv/data/remote/supabase/AvatarCatalogRefreshTest.kt
 app/src/test/java/com/nuvio/tv/data/remote/supabase/SupabaseProfileSetupCopyResultTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/AddonManifestPlaceholderTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/CatalogRepositoryMalformedEntryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/GitHubContributorsRepositoryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/LibraryRepositoryTrackingTest.kt
+app/src/test/java/com/nuvio/tv/data/repository/MDBListRepositoryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/MemberAccessRepositoryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/MetaRepositoryAddonCacheTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/MetaRepositoryCandidateTypeTest.kt
@@ -1137,6 +1154,8 @@ app/src/test/java/com/nuvio/tv/domain/model/WatchProgressTest.kt
 app/src/test/java/com/nuvio/tv/ui/components/ContinueWatchingImageModelTest.kt
 app/src/test/java/com/nuvio/tv/ui/components/FocusMarqueeTextTest.kt
 app/src/test/java/com/nuvio/tv/ui/components/MemberBrandWordmarkTest.kt
+app/src/test/java/com/nuvio/tv/ui/components/PlaybackAvailabilityViewModelTest.kt
+app/src/test/java/com/nuvio/tv/ui/components/StartupLoadingPolicyTest.kt
 app/src/test/java/com/nuvio/tv/ui/components/posteroptions/PosterOptionsControllerShowTest.kt
 app/src/test/java/com/nuvio/tv/ui/navigation/PostPlayRecommendationNavigationPolicyTest.kt
 app/src/test/java/com/nuvio/tv/ui/navigation/SourceSelectionRestorePolicyTest.kt
@@ -1159,12 +1178,13 @@ app/src/test/java/com/nuvio/tv/ui/screens/player/AutoplaySessionCountTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/BluetoothAudioRoutePolicyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/CompressorAudioProcessorTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/LivePlaybackUiPolicyTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/MpvPositionFromMediaRequestTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/NaturalPlaybackCompletionRulesTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/NuvioExoPlayerPerformanceHelperTest.kt
-app/src/test/java/com/nuvio/tv/ui/screens/player/NuvioMp4ExtractorTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/ParallelRangeDataSourceTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/PlaybackNetworkingSslVerificationTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/PlaybackProfileRouteTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/PlayerFirstFrameCodecRecoveryPolicyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/PlayerFrameRateHeuristicsTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/PlayerMediaSourceFactoryTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/PlayerNextEpisodeRulesTest.kt
@@ -1179,9 +1199,12 @@ app/src/test/java/com/nuvio/tv/ui/screens/player/PostPlayResetRulesTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/SidecarCueOrderingTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/SkipIntroVisibilityRulesTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/StillWatchingGatingTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/SubtitleCredentialScopeTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/SubtitleMojibakeSanitizerTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/SubtitleRaceConditionUpgradeTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/SubtitleRoutingTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/TrackSelectionInvestigationTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/Vc1VideoFormatHeuristicsTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/search/SearchPresentationRulesTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/search/SearchViewModelConcurrencyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/search/SearchViewModelPaginationTest.kt
@@ -1199,6 +1222,7 @@ app/src/test/java/com/nuvio/tv/ui/util/RtlKeyUtilsTest.kt
 app/src/test/java/com/nuvio/tv/updater/ReleaseSelectorTest.kt
 app/src/test/java/com/nuvio/tv/updater/UpdateBannerPolicyTest.kt
 app/src/test/java/com/nuvio/tv/updater/VersionUtilsTest.kt
+app/src/test/resources/subtitle-redirect-test.p12
 app/src/testFull/java/com/nuvio/tv/core/plugin/FetchResponseHeadersTest.kt
 app/src/testFull/java/com/nuvio/tv/core/plugin/cloudstream/HomeViewModelCompatStubTest.kt
 assets/brand/app_logo_mark.png

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+branch="$(git branch --show-current)"
+case "$branch" in
+  agent-plan/*) exit 0 ;;
+esac
+
 
 git ls-files | LC_ALL=C sort > tree.txt
 git add tree.txt
