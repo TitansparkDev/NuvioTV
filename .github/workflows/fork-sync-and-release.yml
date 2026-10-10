@@ -75,6 +75,9 @@ jobs:
           if git merge --no-edit --no-ff upstream/dev; then
             echo "Upstream merge clean."
           else
+            # Capture the exact paths before abort clears Git's conflict state.
+            echo "conflicting_files=$(git diff --name-only --diff-filter=U | tr '\n' ' ')" >> "${GITHUB_OUTPUT}"
+            git diff --name-only --diff-filter=U
             git merge --abort || true
             echo "conflict=true" >> "${GITHUB_OUTPUT}"
             exit 1
@@ -82,10 +85,30 @@ jobs:
 
       - name: Report an upstream merge conflict
         if: failure() && steps.sync.outputs.conflict == 'true'
+        env:
+          UPSTREAM_SHA: ${{ steps.decide.outputs.upstream_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CONFLICTING_FILES: ${{ steps.sync.outputs.conflicting_files }}
         run: |
-          gh issue create --repo "${GITHUB_REPOSITORY}" \
-            --title "Upstream sync needs a hand ($(date -u +%Y-%m-%d))" \
-            --body "The scheduled sync could not merge upstream/dev at ${{ steps.decide.outputs.upstream_sha }} into this fork without conflicts. Upstream has edited the same lines as a fork change. Resolve it locally with \`git fetch upstream && git merge upstream/dev\`, push, then re-run this workflow. No release was published, so the app keeps offering the last good build."
+          # Repeated schedules against the same unresolved commit are not new
+          # failures. Reuse an existing open issue rather than creating a fresh
+          # issue and sending the owner another notification every six hours.
+          existing="$(gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search 'Upstream sync needs a hand in:title' --limit 100 \
+            --json number --jq '.[0].number' || true)"
+
+          if [[ -n "${existing}" ]]; then
+            reported="$(gh issue view "${existing}" --repo "${GITHUB_REPOSITORY}" \
+              --json body,comments --jq '[.body, (.comments[].body)] | join("\n")')"
+            if [[ "${reported}" != *"${UPSTREAM_SHA}"* ]]; then
+              gh issue comment "${existing}" --repo "${GITHUB_REPOSITORY}" \
+                --body "A newer upstream/dev commit (${UPSTREAM_SHA}) still conflicts. Paths: ${CONFLICTING_FILES}. [Failing run](${RUN_URL}). No release was published."
+            fi
+          else
+            gh issue create --repo "${GITHUB_REPOSITORY}" \
+              --title "Upstream sync needs a hand ($(date -u +%Y-%m-%d))" \
+              --body "The scheduled sync could not merge upstream/dev at ${UPSTREAM_SHA} into this fork without conflicts. Paths: ${CONFLICTING_FILES}. Resolve with a reviewed merge, run the build and feature checks, and re-run the workflow. [Failing run](${RUN_URL}). No release was published, so the TV keeps the last good build."
+          fi
 
       # Upstream has said it wants the built-in debrid integration gone. This fork keeps
       # it, and the sync above merges upstream changes, so check the feature survived before
@@ -287,6 +310,21 @@ jobs:
             --title "${TAG}" \
             --notes-file notes.md \
             "${apks[@]}"
+
+      # A verified, published APK means past conflict reports are resolved. Do
+      # this only after publishing, never after merely merging into the checkout.
+      - name: Close resolved upstream conflict reports
+        if: success() && steps.decide.outputs.proceed == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh issue list --repo "${GITHUB_REPOSITORY}" --state open \
+            --search 'Upstream sync needs a hand in:title' --limit 100 \
+            --json number --jq '.[].number' | while read -r issue; do
+              [[ -n "${issue}" ]] || continue
+              gh issue close "${issue}" --repo "${GITHUB_REPOSITORY}" \
+                --reason completed --comment "Resolved by published release ${RELEASE_TAG}." || true
+            done
 
       # Anything else that went wrong - a broken build, a bad secret, a failed publish.
       # The two failures above explain themselves and are handled where they happen; this
