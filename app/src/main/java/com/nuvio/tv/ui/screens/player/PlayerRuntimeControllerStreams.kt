@@ -618,6 +618,12 @@ private fun PlayerRuntimeController.applySelectedStreamState(
         filename = currentFilename,
         responseHeaders = currentStreamResponseHeaders
     )
+    // A source switch mints a new debrid link for the same file, and without a file index a
+    // multi-file torrent could hand one file's bytes to another, so that case keys on the url.
+    val fileIdx = stream.getEffectiveFileIdx()
+    currentStreamCacheKey = stream.getEffectiveInfoHash()?.lowercase()?.takeIf { fileIdx != null }?.let { hash ->
+        "$hash:$fileIdx"
+    }
     parsingErrorProbeAttempted = false
     applyStreamMetadata(stream)
 }
@@ -771,6 +777,26 @@ internal fun PlayerRuntimeController.switchToSourceStream(
         return
     }
 
+    if (stream.youTubeIdToResolve() != null) {
+        debridResolveJob?.cancel()
+        _uiState.update { it.copy(isLoadingSourceStreams = true, sourceStreamsError = null) }
+        debridResolveJob = scope.launch {
+            val resolved = resolveYouTubeStream(stream)
+            debridResolveJob = null
+            if (resolved != null) {
+                switchToSourceStream(resolved)
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isLoadingSourceStreams = false,
+                        sourceStreamsError = context.getString(com.nuvio.tv.R.string.youtube_resolution_failed)
+                    )
+                }
+            }
+        }
+        return
+    }
+
     if (stream.isTorrent()) {
         debridResolveJob?.cancel()
         _uiState.update { it.copy(isLoadingSourceStreams = true, sourceStreamsError = null) }
@@ -896,7 +922,8 @@ internal fun PlayerRuntimeController.switchToSourceStream(
                         filename = currentFilename,
                         responseHeaders = currentStreamResponseHeaders,
                         mimeTypeOverride = currentStreamMimeType,
-                        audioDelayUsProvider = audioDelayUs::get
+                        audioDelayUsProvider = audioDelayUs::get,
+                        cacheKey = currentStreamCacheKey
                     )
                 )
                 player.playWhenReady = true
@@ -1299,6 +1326,26 @@ internal fun PlayerRuntimeController.switchToEpisodeStream(
         return
     }
 
+    if (stream.youTubeIdToResolve() != null) {
+        debridResolveJob?.cancel()
+        _uiState.update { it.copy(isLoadingEpisodeStreams = true, episodeStreamsError = null) }
+        debridResolveJob = scope.launch {
+            val resolved = resolveYouTubeStream(stream)
+            debridResolveJob = null
+            if (resolved != null) {
+                switchToEpisodeStream(resolved, forcedTargetVideo, isAutoPlay)
+            } else {
+                _uiState.update {
+                    it.copy(
+                        isLoadingEpisodeStreams = false,
+                        episodeStreamsError = context.getString(com.nuvio.tv.R.string.youtube_resolution_failed)
+                    )
+                }
+            }
+        }
+        return
+    }
+
     if (stream.isTorrent()) {
         val resolveSeason = forcedTargetVideo?.season ?: _uiState.value.episodeStreamsSeason ?: currentSeason
         val resolveEpisode = forcedTargetVideo?.episode ?: _uiState.value.episodeStreamsEpisode ?: currentEpisode
@@ -1600,6 +1647,21 @@ internal fun PlayerRuntimeController.showEpisodeStreamPicker(video: Video, force
     loadStreamsForEpisode(video = video, forceRefresh = forceRefresh)
 }
 
+internal suspend fun PlayerRuntimeController.resolveYouTubeStream(stream: Stream): Stream? {
+    recordLoadingDiagnosticEvent(
+        phase = "resolving_youtube",
+        message = context.getString(com.nuvio.tv.R.string.youtube_resolving_stream),
+        detail = stream.addonName
+    )
+    val resolved = youTubeStreamResolver.resolve(stream)
+    recordLoadingDiagnosticEvent(
+        phase = if (resolved != null) "resolving_youtube_done" else "resolving_youtube_failed",
+        message = context.getString(com.nuvio.tv.R.string.youtube_resolving_stream),
+        detail = stream.addonName
+    )
+    return resolved
+}
+
 internal suspend fun PlayerRuntimeController.resolveDirectDebridStreamIfNeeded(
     stream: Stream,
     season: Int?,
@@ -1634,11 +1696,37 @@ internal suspend fun PlayerRuntimeController.resolveDirectDebridStreamIfNeeded(
 }
 
 /**
- * Fork: with [prefetchOnly], this runs the identical selection pipeline while the current
- * episode is still playing, but displays nothing and plays nothing - it simply banks the
- * chosen stream. Reusing this function instead of copying the selection logic means the
- * stream chosen early is chosen by exactly the same rules as one chosen at the threshold;
- * a parallel implementation would drift out of step the first time either changed.
+ * Upstream source preloading warms the search cache for the next episode.
+ */
+internal fun PlayerRuntimeController.preloadNextEpisodeSources() {
+    if (nextEpisodePreloadTriggered) return
+    val nextVideo = nextEpisodeVideo ?: return
+    val type = contentType ?: return
+    val nextInfo = _uiState.value.nextEpisode ?: return
+    if (!nextInfo.hasAired) return
+
+    nextEpisodePreloadTriggered = true
+    nextEpisodePreloadJob?.cancel()
+    nextEpisodePreloadJob = scope.launch {
+        Log.d(PlayerRuntimeController.TAG, "Preloading sources for next episode: S${nextVideo.season}E${nextVideo.episode}")
+        streamRepository.getStreamsFromAllAddons(
+            type = type,
+            videoId = nextVideo.id,
+            season = nextVideo.season,
+            episode = nextVideo.episode
+        ).collect { /* results cached by StreamSearchSessionCache */ }
+    }
+}
+
+internal fun PlayerRuntimeController.cancelNextEpisodePreload() {
+    nextEpisodePreloadJob?.cancel()
+    nextEpisodePreloadJob = null
+    nextEpisodePreloadTriggered = false
+}
+
+/**
+ * Fork: [prefetchOnly] selects a stream in advance using the same pipeline
+ * as normal playback, so the next episode can start without a search card.
  */
 internal fun PlayerRuntimeController.playNextEpisode(
     userInitiated: Boolean = false,
@@ -1646,6 +1734,7 @@ internal fun PlayerRuntimeController.playNextEpisode(
 ) {
     val nextVideo = nextEpisodeVideo ?: return
     val type = contentType ?: return
+    nextEpisodePreloadTriggered = false
 
     val state = _uiState.value
     val nextInfo = state.nextEpisode ?: return

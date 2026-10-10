@@ -11,6 +11,7 @@ plugins {
     // which are pure cost once the DSN is empty. See sentryDsn below.
 }
 
+import com.android.build.gradle.internal.tasks.L8DexDesugarLibTask
 import java.io.File
 import java.util.Properties
 
@@ -107,10 +108,11 @@ android {
 
     defaultConfig {
         applicationId = "com.nuvio.tv"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1062
-        versionName = "1.0.0"
+        versionCode = 1068
+        versionName = "1.1.0-beta.5"
 
         buildConfigField("String", "PARENTAL_GUIDE_API_URL", "\"${localProperties.getProperty("PARENTAL_GUIDE_API_URL", "")}\"")
         buildConfigField("String", "INTRODB_API_URL", "\"${localProperties.getProperty("INTRODB_API_URL", "")}\"")
@@ -123,6 +125,7 @@ android {
         buildConfigField("String", "TRAKT_REDIRECT_URI", "\"${localProperties.getProperty("TRAKT_REDIRECT_URI", "urn:ietf:wg:oauth:2.0:oob")}\"")
         buildConfigField("String", "SIMKL_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "SIMKL_CLIENT_ID")))
         buildConfigField("String", "SIMKL_APP_NAME", buildConfigString(resolveProperty(devProperties, localProperties, "SIMKL_APP_NAME", "nuvio")))
+        buildConfigField("String", "MDBLIST_CLIENT_ID", buildConfigString(resolveProperty(devProperties, localProperties, "MDBLIST_CLIENT_ID")))
         buildConfigField("String", "TMDB_API_KEY", "\"${localProperties.getProperty("TMDB_API_KEY", "")}\"")
         buildConfigField("String", "TV_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("TV_LOGIN_WEB_BASE_URL", "https://nuvio.tv/tv-login")}\"")
         buildConfigField("String", "DEVICE_LOGIN_WEB_BASE_URL", "\"${localProperties.getProperty("DEVICE_LOGIN_WEB_BASE_URL", "https://nuvio.tv/link")}\"")
@@ -153,7 +156,7 @@ android {
         // Fork: the in-app updater must check this fork's releases, not upstream's, or it
         // would offer an APK signed with a different key that Android refuses to install
         // (and which would not contain the shuffle button).
-        buildConfigField("String", "GITHUB_OWNER", "\"Titanspark21\"")
+        buildConfigField("String", "GITHUB_OWNER", "\"TitansparkDev\"")
         buildConfigField("String", "GITHUB_REPO", "\"NuvioTV\"")
 
         // Fork: -PFORK_BUILD=<n> appends a build counter to the upstream version.
@@ -214,8 +217,15 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
-            isDebuggable = false
+            // Local validation can opt into a throwaway debug certificate without
+            // accessing the private TV update key. Normal builds retain the
+            // release certificate for APK upgrade compatibility.
+            signingConfig = if (truthy(providers.gradleProperty("localDebugSigning").orNull)) {
+                signingConfigs.getByName("debug")
+            } else {
+                signingConfigs.getByName("release")
+            }
+            isDebuggable = parseBooleanProperty(providers.gradleProperty("debuggable").orNull)
             isMinifyEnabled = false
 
             buildConfigField("boolean", "IS_DEBUG_BUILD", "true")
@@ -352,8 +362,7 @@ android {
                 "lib/*/libavformat.so",
                 "lib/*/libavutil.so",
                 "lib/*/libswscale.so",
-                "lib/*/libswresample.so",
-                "lib/*/libtorrserver.so"
+                "lib/*/libswresample.so"
             )
         }
     }
@@ -367,6 +376,14 @@ androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
         val isPlaystore = variant.productFlavors.any { it.second == "playstore" }
         variant.applicationId.set(if (isPlaystore) "com.nuvio.appdebug" else "com.nuviodebug.com")
+    }
+}
+
+afterEvaluate {
+    tasks.withType<L8DexDesugarLibTask>().configureEach {
+        if (name.endsWith("AndroidTest")) {
+            keepRulesConfigurations.add("-keep class j\$.** { *; }")
+        }
     }
 }
 
@@ -451,7 +468,6 @@ dependencies {
     implementation(libs.coil.svg)
     implementation(libs.coil.network.okhttp)
     implementation(libs.coil.network.cache.control)
-    implementation(libs.lottie.compose)
 
     // Navigation
     implementation(libs.navigation.compose)
@@ -496,6 +512,7 @@ dependencies {
         "libs/lib-decoder-mpegh-release.aar"
     ))
     add("fullImplementation", files("libs/lib-decoder-iamf-release.aar"))
+    implementation(files("libs/lib-nuvio-engine-android-0.1.4.aar"))
     if (useLocalFfmpegDecoder) {
         implementation(project(":ffmpeg-decoder-downmix"))
     } else {
@@ -561,6 +578,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
     testImplementation("io.mockk:mockk:1.13.12")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.3.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
