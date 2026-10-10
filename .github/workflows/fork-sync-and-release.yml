@@ -168,6 +168,10 @@ jobs:
             --label torbox-instant \
             --body-file torbox-issue.md
 
+      - name: Verify required fork features and TV updater destination
+        if: steps.decide.outputs.proceed == 'true'
+        run: python3 scripts/check-fork-feature-preservation.py
+
       - name: Read version and pick a build number
         if: steps.decide.outputs.proceed == 'true'
         id: version

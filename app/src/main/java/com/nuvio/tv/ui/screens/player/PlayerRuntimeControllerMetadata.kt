@@ -256,25 +256,25 @@ internal fun PlayerRuntimeController.recomputeNextEpisode(resetVisibility: Boole
         return
     }
 
-    // Fork: when the owner started this show with the shuffle button, "next" means another
-    // random episode rather than the one after this. Everything downstream - the end card,
-    // the countdown, autoplay - is untouched and simply acts on whatever is returned here.
-    val shuffling = com.nuvio.tv.shuffleplay.ShufflePlaySession.isActiveFor(contentId)
-    if (shuffling) {
-        // Record what is playing now so a short run does not keep serving the same few.
+    // A fork shuffle session overrides the default progression; otherwise use
+    // upstream's profile-aware shuffle selection and its persistence semantics.
+    val forkShuffleActive = com.nuvio.tv.shuffleplay.ShufflePlaySession.isActiveFor(contentId)
+    if (forkShuffleActive) {
         videoId?.let(com.nuvio.tv.shuffleplay.ShufflePlaySession::remember)
     }
-    val resolvedNext = if (shuffling) {
+    val resolvedNext = if (forkShuffleActive) {
         com.nuvio.tv.shuffleplay.ShufflePlaySession.pickNext(
             videos = metaVideos,
             currentSeason = season,
             currentEpisode = episode
         )
     } else {
-        PlayerNextEpisodeRules.resolveNextEpisode(
-            videos = metaVideos,
-            currentSeason = season,
-            currentEpisode = episode
+        val shuffleState = playbackShuffleState ?: run {
+            clearNextEpisodeAndCancelPostPlay()
+            return
+        }
+        episodeShufflePlayback.nextEpisode(
+            profileId, contentId.orEmpty(), metaVideos, season, episode, shuffleState
         )
     }
 
@@ -294,6 +294,7 @@ internal fun PlayerRuntimeController.recomputeNextEpisode(resetVisibility: Boole
         overview = resolvedNext.overview,
         released = resolvedNext.released,
         hasAired = hasAired,
+        available = resolvedNext.available,
         unairedMessage = if (hasAired) {
             null
         } else {
@@ -398,6 +399,23 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
     if (state.postPlayMode != null || state.postPlayDismissedForCurrentEpisode) return
 
     val effectiveDuration = effectiveDurationEarly
+
+    // Preload: start fetching sources for next episode before the button appears.
+    if (preloadNextEpisodeSourcesSetting && !nextEpisodePreloadTriggered && state.nextEpisode != null) {
+        val preloadLeadMs = streamAutoPlayTimeoutSecondsSetting.toLong() * 1_000L
+        val shouldPreload = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(
+            positionMs = positionMs + preloadLeadMs,
+            durationMs = effectiveDuration,
+            skipIntervals = skipIntervals,
+            thresholdMode = nextEpisodeThresholdModeSetting,
+            thresholdPercent = nextEpisodeThresholdPercentSetting,
+            thresholdMinutesBeforeEnd = nextEpisodeThresholdMinutesBeforeEndSetting
+        )
+        if (shouldPreload) {
+            preloadNextEpisodeSources()
+        }
+    }
+
     val shouldShow = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(
         positionMs = positionMs,
         durationMs = effectiveDuration,
@@ -441,12 +459,16 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
     if (shouldEnterStillWatching) {
         enterStillWatchingPromptMode()
     } else {
-        // Fork: a stream chosen ahead of time means there is nothing to wait for, so cut
-        // straight to it without ever showing the searching card. This is the whole point
-        // of the prefetch - the card was only ever a progress indicator for the search.
+        val ne = state.nextEpisode
+        val isUnplayable = !ne.hasAired ||
+            (ne.released.isNullOrBlank() && ne.available == false)
+        if (isUnplayable) return
+
+        // Skip the searching card only when the fork has already resolved an
+        // actually playable next-episode stream and silent autoplay is enabled.
         val banked = prefetchedNextStream
         val bankedMatchesNext = banked != null && prefetchedNextVideoId == nextEpisodeVideo?.id
-        if (bankedMatchesNext && state.nextEpisode.hasAired &&
+        if (bankedMatchesNext &&
             streamAutoPlayNextEpisodeEnabledSetting && nextEpisodeSilentAutoPlaySetting
         ) {
             val target = nextEpisodeVideo
@@ -471,7 +493,7 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
         _uiState.update {
             it.copy(postPlayMode = PostPlayMode.AutoPlay(nextEpisode = state.nextEpisode))
         }
-        if (state.nextEpisode.hasAired && streamAutoPlayNextEpisodeEnabledSetting) {
+        if (streamAutoPlayNextEpisodeEnabledSetting) {
             playNextEpisode()
         }
     }

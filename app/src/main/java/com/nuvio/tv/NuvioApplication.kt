@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.StrictMode
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
+import com.nuvio.tv.core.image.CustomPosterFallbackInterceptor
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.gif.GifDecoder
@@ -98,7 +99,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                 .dns(IPv4FirstDns())
                 .connectTimeout(4, TimeUnit.SECONDS)
                 .readTimeout(5, TimeUnit.SECONDS)
-                .callTimeout(12, TimeUnit.SECONDS)
+                .callTimeout(8, TimeUnit.SECONDS)
                 .addInterceptor { chain ->
                     try {
                         chain.proceed(chain.request())
@@ -117,12 +118,8 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
 
         return ImageLoader.Builder(this)
             .components {
-                // Size-aware TMDB downscaler: the Bingecat catalogue serves original-size
-                // TMDB image URLs (multi-MB, 600-1200ms to decode). Rewrite them to a bucket
-                // matching the resolved display target. Only touches image.tmdb.org
-                // /t/p/original/ at poster-sized targets (<=780px); screen-sized backdrops
-                // (>780px) and unsized requests keep original. Sizes off the resolved target,
-                // so it tracks the card size AND the UI-scale feature automatically.
+                // Preserve the fork's size-aware TMDB image optimization alongside
+                // upstream's custom poster fallback support.
                 add(coil3.map.Mapper<String, String> { data, options ->
                     val w = (options.size.width as? coil3.size.Dimension.Pixels)?.px
                     if (data.startsWith("https://image.tmdb.org/t/p/original/") && w != null && w in 1..780) {
@@ -136,6 +133,7 @@ class NuvioApplication : Application(), SingletonImageLoader.Factory {
                         null
                     }
                 })
+                add(CustomPosterFallbackInterceptor())
                 if (Build.VERSION.SDK_INT >= 28) {
                     add(AnimatedImageDecoder.Factory())
                 } else {
