@@ -347,7 +347,6 @@ fun ThemeSettingsContent(
                 )
                 if (nightModeState.enabled) {
                     SliderSettingsItem(
-                        icon = null,
                         title = stringResource(R.string.night_mode_strength),
                         value = nightModeState.strength,
                         valueText = "${nightModeState.strength}%",

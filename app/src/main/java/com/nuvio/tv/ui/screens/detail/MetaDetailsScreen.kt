@@ -2629,7 +2629,7 @@ private fun MetaDetailsContent(
                         randomEpisodeFocusRequester = randomEpisodeFocusRequester,
                         hideLogoDuringTrailer = hideLogoDuringTrailer,
                         isTrailerPlaying = isTrailerPlaying,
-                        onRandomEpisodeClick = randomEpisodeClick,
+                        onForkRandomEpisodeClick = randomEpisodeClick,
                         onRandomEpisodeLongPress = if (showManualPlayOption) randomEpisodeLongPress else null,
                         onRollAgainClick = if (showRollAgain) rollAgainViewModel::rollAgain else null,
                         isRollingAgain = rollAgainState.isRolling,

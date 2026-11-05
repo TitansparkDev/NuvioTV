@@ -175,7 +175,6 @@ fun EssentialPlaybackSettingsContent(
                         title = stringResource(R.string.addon_speed_title),
                         subtitle = stringResource(R.string.addon_speed_sub),
                         value = "",
-                        trailingIcon = Icons.Default.Tune,
                         onClick = onNavigateToAddonSpeed
                     )
                 }

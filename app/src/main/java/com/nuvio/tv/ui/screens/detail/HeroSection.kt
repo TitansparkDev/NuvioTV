@@ -129,7 +129,7 @@ fun HeroContentSection(
     onHeroActionFocused: () -> Unit = {},
     onPlayFocusRestored: () -> Unit = {},
     onShowFullDescription: () -> Unit = {},
-    onRandomEpisodeClick: (() -> Unit)? = null,
+    onForkRandomEpisodeClick: (() -> Unit)? = null,
     onRandomEpisodeLongPress: (() -> Unit)? = null,
     onRollAgainClick: (() -> Unit)? = null,
     isRollingAgain: Boolean = false,
@@ -300,10 +300,10 @@ fun HeroContentSection(
                             onFocused = onHeroActionFocused
                         )
 
-                        if (isSeriesApi && onRandomEpisodeClick != null) {
+                        if (isSeriesApi && onForkRandomEpisodeClick != null) {
                             ShuffleActionButton(
                                 contentDescription = stringResource(R.string.hero_play_random_episode),
-                                onClick = onRandomEpisodeClick,
+                                onClick = onForkRandomEpisodeClick,
                                 onLongPress = onRandomEpisodeLongPress,
                                 onFocused = onHeroActionFocused
                             )

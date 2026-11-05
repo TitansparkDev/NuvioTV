@@ -246,7 +246,8 @@ android {
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            // Match upstream CI signing support for fresh verification worktrees.
+            signingConfig = signingConfigs.getByName(if (useDebugReleaseSigning) "debug" else "release")
             isDebuggable = parseBooleanProperty(providers.gradleProperty("debuggable").orNull)
             isMinifyEnabled = false
 
