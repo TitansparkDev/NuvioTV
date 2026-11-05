@@ -47,6 +47,10 @@ h3.g0 extends DefaultLoadControl and overrides loading/start decisions. The insp
 
 Nuvio's bundled standard engine exposes 1,000-millisecond startup and 2,000-millisecond rebuffer defaults. The fork also has separate custom and performance buffering paths. Raising the standard startup threshold is not an evidenced first-picture improvement. The proposed memory replacement also bypasses the fork's existing device budgeting and removes its retained rewind buffer. These changes are excluded.
 
+### Recognises large MP4 files
+
+N2.r.h checks for an MP4 filename and a size greater than 21,474,836,480 bytes (20 GiB), confirming that the ZIP's threshold exists in the APK. This predicate does not measure how quickly an individual file starts. The plan excludes the blanket filter because it can discard a suitable file and the supplied Nuvio implementation does not first establish that its remaining alternatives are playable.
+
 ### Abandons stuck starts
 
 h3.Y1.run checks first-picture state and buffered duration, schedules another check after two seconds, and can ask another-link logic to continue. The inspected body includes a 12-second buffer-stagnation threshold and a 45-second no-picture threshold. It distinguishes a delivery-side 429 when presenting failure. The caller's initial scheduling and all alternate-source selection rules are not fully reconstructed here.
