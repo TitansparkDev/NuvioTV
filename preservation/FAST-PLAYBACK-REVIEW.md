@@ -1,6 +1,6 @@
 # Debrid Stream APK review and Nuvio playback decisions
 
-Reviewed on 2026-11-05. This is a static inspection of the supplied Fire TV APK, compared with this fork before and after merging upstream/dev at 1206736fd. No community scraper, TorBox account, or video endpoint was contacted during this inspection. No third-party source or binary was added to the fork.
+Reviewed on 2026-11-05. This is a static inspection of the supplied Fire TV APK, compared with this fork before and after merging upstream/dev at 1206736fd. No community scraper, TorBox account, or video endpoint was contacted during this inspection. No decompiled Debrid Stream source or binary was added to the fork.
 
 ## Evidence and limits
 
