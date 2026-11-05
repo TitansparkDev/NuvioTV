@@ -1235,12 +1235,6 @@ open class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            val nightModeState by nightModeManager.state.collectAsState()
-                            com.nuvio.tv.nightmode.NightModeOverlay(
-                                enabled = nightModeState.enabled,
-                                strengthPercent = nightModeState.strength,
-                                modifier = Modifier.fillMaxSize()
-                            )
                             val isTrailerPlaying by trailerPlayerPool.isTrailerPlaying.collectAsState()
                             LaunchedEffect(isTrailerPlaying) {
                                 if (!isTrailerPlaying) ambientIdleController.onInteraction()
@@ -1251,6 +1245,12 @@ open class MainActivity : ComponentActivity() {
                                     autoNextOverlay == null &&
                                     !isTrailerPlaying,
                                 onShown = { trailerPlayerPool.stop() }
+                            )
+                            val nightModeState by nightModeManager.state.collectAsState()
+                            com.nuvio.tv.nightmode.NightModeOverlay(
+                                enabled = nightModeState.enabled,
+                                strengthPercent = nightModeState.strength,
+                                modifier = Modifier.fillMaxSize()
                             )
                         }
                     }

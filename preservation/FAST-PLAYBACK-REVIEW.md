@@ -21,7 +21,7 @@ Nuvio already has a 15-minute shared search-session cache, profile/source-config
 
 ### Can start searching before playback
 
-The movie and episode UI coroutine paths d3.e.invokeSuspend and d3.g.invokeSuspend call X2.N3.a with the media identity. X2.N3.a avoids restarting an equivalent active/populated search and delegates new work to X2.N3.g, which starts N2.r.k. This confirms an early reusable search mechanism; the exact UI entry/focus lifecycle is not fully reconstructed in this review.
+The movie and episode UI coroutine paths d3.e.invokeSuspend and d3.g.invokeSuspend call X2.N3.a with the media identity. X2.N3.a avoids restarting an equivalent active/populated search and delegates new work to X2.N3.g, which starts N2.r.k. The d3.r.a composable retains the trace name DetailsBackgroundScrapeEffect (AutoPlayFlow.kt:720) and installs the d3.e coroutine through LaunchedEffect. This directly confirms a title-details background search. Poster-focus behaviour outside that title page is not established.
 
 The ZIP's details-page trigger would make every visited eligible title a potential source search. Merely highlighting a poster is not a trigger in the supplied ZIP code. If ten different title pages are visited and each has three compatible add-ons, that can mean thirty add-on stream requests before Play, plus TorBox availability work. Existing-result reuse can reduce this only when the requested title and configuration match an existing session.
 
