@@ -76,3 +76,9 @@ PLAN.md contains five implementation tasks and two final gates:
 No browsing-triggered searches, bundled community endpoints, uncached torrent downloads, speculative movie bytes, higher request budgets, season-wide preparation, replacement buffer engine, or blanket large-MP4 exclusion are introduced by the plan. Performance claims require subsequent device measurements.
 
 The original PLAN.md device-only observation about real per-addon timings is retained under Limits in the new plan, outside executable work.
+
+## Upstream merge verification
+
+The upstream merge through 1206736fd and its integration repairs were verified at da0805733 in clean worktrees. Subsequent commits change only PLAN.md and this review; the application source, build configuration and dependencies remain identical to the verified revision. Pre-existing local deletions and untracked work were preserved outside those verification checkouts.
+
+`agentq plan lint PLAN.md --baseline=all --strict --ref da0805733 --json` completed with zero errors and zero warnings. All eight baseline checks passed: the five focused test selections, the full fullDebug JVM test suite, the TorBox preservation guard and fullDebug APK assembly. APK verification selected standard Android debug signing with `-PciUseDebugSigning=true`; normal signing defaults remain unchanged. No APK was installed or published.
