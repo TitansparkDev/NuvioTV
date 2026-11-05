@@ -1691,6 +1691,7 @@ gradlew.bat
 libmpv-android
 local.example.properties
 org/libtorrent4j/swig/byte_vector.class
+preservation/FAST-PLAYBACK-REVIEW.md
 preservation/TORBOX-INSTANT.md
 release_test_cases.csv
 scripts/check-torbox-instant.sh
