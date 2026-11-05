@@ -89,7 +89,8 @@ class MetaRepositoryAddonCacheTest {
             context = context,
             api = api,
             addonRepository = addonRepository,
-            addonSpeedLog = mockk(relaxed = true)
+            addonSpeedLog = mockk(relaxed = true),
+            serverCatalog = mockk(relaxed = true)
         )
     }
 

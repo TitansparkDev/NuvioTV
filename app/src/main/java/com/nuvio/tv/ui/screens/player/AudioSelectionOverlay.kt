@@ -5,6 +5,8 @@ package com.nuvio.tv.ui.screens.player
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,7 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -28,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,6 +44,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -50,10 +61,12 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.nuvio.tv.R
+import com.nuvio.tv.data.local.NightMode
 import com.nuvio.tv.ui.screens.detail.requestFocusAfterFrames
 import com.nuvio.tv.ui.util.languageCodeToName
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 internal fun AudioSelectionOverlay(
@@ -67,12 +80,15 @@ internal fun AudioSelectionOverlay(
     isCenterMixAvailable: Boolean,
     dialogueLevelerLevel: Int,
     isDialogueLevelerAvailable: Boolean,
+    nightMode: NightMode,
+    isNightModeAvailable: Boolean,
     persistAmplification: Boolean,
     onTrackSelected: (Int) -> Unit,
     onAudioDelayChange: (Int) -> Unit,
     onAmplificationChange: (Int) -> Unit,
     onCenterMixLevelChange: (Int) -> Unit,
     onDialogueLevelerChange: (Int) -> Unit,
+    onNightModeChange: (NightMode) -> Unit,
     onPersistAmplificationChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -86,6 +102,7 @@ internal fun AudioSelectionOverlay(
     val levelerPlusFocusRequester = remember { FocusRequester() }
     val centerMinusFocusRequester = remember { FocusRequester() }
     val centerPlusFocusRequester = remember { FocusRequester() }
+    val nightModeFocusRequester = remember { FocusRequester() }
     val persistFocusRequester = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val currentDelayMs = audioDelayMs.coerceIn(AUDIO_DELAY_MIN_MS, AUDIO_DELAY_MAX_MS)
@@ -227,6 +244,8 @@ internal fun AudioSelectionOverlay(
                         isCenterMixAvailable = isCenterMixAvailable,
                         dialogueLevelerLevel = dialogueLevelerLevel,
                         isDialogueLevelerAvailable = isDialogueLevelerAvailable,
+                        nightMode = nightMode,
+                        isNightModeAvailable = isNightModeAvailable,
                         persistAmplification = persistAmplification,
                         delayMinusFocusRequester = delayMinusFocusRequester,
                         delayPlusFocusRequester = delayPlusFocusRequester,
@@ -236,6 +255,7 @@ internal fun AudioSelectionOverlay(
                         levelerPlusFocusRequester = levelerPlusFocusRequester,
                         centerMinusFocusRequester = centerMinusFocusRequester,
                         centerPlusFocusRequester = centerPlusFocusRequester,
+                        nightModeFocusRequester = nightModeFocusRequester,
                         persistFocusRequester = persistFocusRequester,
                         leftFocusRequester = tracksFocusRequester,
                         onAudioDelayChange = onAudioDelayChange,
@@ -248,6 +268,7 @@ internal fun AudioSelectionOverlay(
                             pendingControlFocusTarget = focusTarget
                             onDialogueLevelerChange(nextLevel)
                         },
+                        onNightModeChange = onNightModeChange,
                         onPersistAmplificationChange = onPersistAmplificationChange
                     )
                 }
@@ -322,6 +343,10 @@ private fun AudioTrackCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
+            .semantics {
+                role = Role.RadioButton
+                this.selected = isSelected
+            }
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusProperties { right = rightFocusRequester }
             .onFocusChanged { if (it.isFocused) onFocused() },
@@ -406,6 +431,8 @@ private fun AudioControlsContent(
     isCenterMixAvailable: Boolean,
     dialogueLevelerLevel: Int,
     isDialogueLevelerAvailable: Boolean,
+    nightMode: NightMode,
+    isNightModeAvailable: Boolean,
     persistAmplification: Boolean,
     delayMinusFocusRequester: FocusRequester,
     delayPlusFocusRequester: FocusRequester,
@@ -415,12 +442,14 @@ private fun AudioControlsContent(
     levelerPlusFocusRequester: FocusRequester,
     centerMinusFocusRequester: FocusRequester,
     centerPlusFocusRequester: FocusRequester,
+    nightModeFocusRequester: FocusRequester,
     persistFocusRequester: FocusRequester,
     leftFocusRequester: FocusRequester,
     onAudioDelayChange: (Int) -> Unit,
     onAmplificationChange: (Int, AudioControlFocusTarget) -> Unit,
     onCenterMixLevelChange: (Int) -> Unit,
     onDialogueLevelerChange: (Int, AudioControlFocusTarget) -> Unit,
+    onNightModeChange: (NightMode) -> Unit,
     onPersistAmplificationChange: (Boolean) -> Unit
 ) {
     val currentDelayMs = audioDelayMs.coerceIn(AUDIO_DELAY_MIN_MS, AUDIO_DELAY_MAX_MS)
@@ -436,6 +465,11 @@ private fun AudioControlsContent(
     val canDecreaseLeveler = isDialogueLevelerAvailable && currentLevelerLevel > DIALOGUE_LEVELER_MIN
     val canIncreaseLeveler = isDialogueLevelerAvailable && currentLevelerLevel < DIALOGUE_LEVELER_MAX
 
+    val belowCenterFocusRequester = if (isNightModeAvailable) {
+        nightModeFocusRequester
+    } else {
+        persistFocusRequester
+    }
     val firstDelayFocusRequester = if (canDecreaseDelay) {
         delayMinusFocusRequester
     } else {
@@ -444,7 +478,7 @@ private fun AudioControlsContent(
     val firstCenterFocusRequester = when {
         canDecreaseCenterMix -> centerMinusFocusRequester
         canIncreaseCenterMix -> centerPlusFocusRequester
-        else -> persistFocusRequester
+        else -> belowCenterFocusRequester
     }
     val firstLevelerFocusRequester = when {
         canDecreaseLeveler -> levelerMinusFocusRequester
@@ -525,9 +559,11 @@ private fun AudioControlsContent(
         )
     }
 
+    // Scrolls when the controls are taller than the overlay; focus brings the focused control into view.
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(top = NuvioTheme.spacing.xs, bottom = NuvioTheme.spacing.sm),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
@@ -556,6 +592,20 @@ private fun AudioControlsContent(
             },
             onIncrease = {
                 val nextDelayMs = currentDelayMs + AUDIO_DELAY_STEP_MS
+                onAudioDelayChange(nextDelayMs)
+                if (nextDelayMs >= AUDIO_DELAY_MAX_MS && canDecreaseDelay) {
+                    runCatching { delayMinusFocusRequester.requestFocus() }
+                }
+            },
+            onDecreaseHold = { stepMs ->
+                val nextDelayMs = currentDelayMs - stepMs
+                onAudioDelayChange(nextDelayMs)
+                if (nextDelayMs <= AUDIO_DELAY_MIN_MS && canIncreaseDelay) {
+                    runCatching { delayPlusFocusRequester.requestFocus() }
+                }
+            },
+            onIncreaseHold = { stepMs ->
+                val nextDelayMs = currentDelayMs + stepMs
                 onAudioDelayChange(nextDelayMs)
                 if (nextDelayMs >= AUDIO_DELAY_MAX_MS && canDecreaseDelay) {
                     runCatching { delayMinusFocusRequester.requestFocus() }
@@ -654,7 +704,7 @@ private fun AudioControlsContent(
                 minusLeftFocusRequester = leftFocusRequester,
                 plusLeftFocusRequester = centerPlusLeftFocusRequester,
                 upFocusRequester = firstLevelerFocusRequester,
-                downFocusRequester = persistFocusRequester,
+                downFocusRequester = belowCenterFocusRequester,
                 onDecrease = {
                     val nextDb = currentCenterMixDb - 1
                     onCenterMixLevelChange(nextDb)
@@ -671,14 +721,63 @@ private fun AudioControlsContent(
                 }
             )
 
+            if (isNightModeAvailable) {
+                val nightModeOn = nightMode != NightMode.OFF
+                Card(
+                    onClick = {
+                        val levels = NightMode.entries
+                        onNightModeChange(levels[(levels.indexOf(nightMode) + 1) % levels.size])
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(nightModeFocusRequester)
+                        .focusProperties {
+                            left = persistLeftFocusRequester
+                            up = persistUpFocusRequester
+                            down = persistFocusRequester
+                        },
+                    colors = CardDefaults.colors(
+                        containerColor = if (nightModeOn) NuvioTheme.colors.Secondary else Color.Transparent,
+                        focusedContainerColor = if (nightModeOn) NuvioTheme.colors.Secondary else Color.Transparent
+                    ),
+                    shape = CardDefaults.shape(RoundedCornerShape(NuvioTheme.radii.md)),
+                    border = CardDefaults.border(
+                        border = Border(
+                            border = BorderStroke(NuvioTheme.spacing.xxs, Color.White.copy(alpha = 0.18f)),
+                            shape = RoundedCornerShape(NuvioTheme.radii.md)
+                        ),
+                        focusedBorder = Border(
+                            border = NuvioTheme.focusRing.border(NuvioTheme.spacing.xxs),
+                            shape = RoundedCornerShape(NuvioTheme.radii.md)
+                        )
+                    ),
+                    scale = CardDefaults.scale(focusedScale = 1f, pressedScale = 1f)
+                ) {
+                    Text(
+                        text = stringResource(R.string.audio_night_mode_value, nightModeLevelLabel(nightMode)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (nightModeOn) NuvioTheme.colors.OnSecondary else Color.White,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                    )
+                }
+            }
+
             Card(
                 onClick = { onPersistAmplificationChange(!persistAmplification) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(persistFocusRequester)
+                    .semantics {
+                        role = Role.Switch
+                        toggleableState = if (persistAmplification) {
+                            ToggleableState.On
+                        } else {
+                            ToggleableState.Off
+                        }
+                    }
                     .focusProperties {
                         left = persistLeftFocusRequester
-                        up = persistUpFocusRequester
+                        up = if (isNightModeAvailable) nightModeFocusRequester else persistUpFocusRequester
                     },
                 colors = CardDefaults.colors(
                     containerColor = if (persistAmplification) NuvioTheme.colors.Secondary else Color.Transparent,
@@ -726,7 +825,9 @@ private fun AdjustmentSection(
     upFocusRequester: FocusRequester?,
     downFocusRequester: FocusRequester?,
     onDecrease: () -> Unit,
-    onIncrease: () -> Unit
+    onIncrease: () -> Unit,
+    onDecreaseHold: ((Int) -> Unit)? = null,
+    onIncreaseHold: ((Int) -> Unit)? = null
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -751,22 +852,26 @@ private fun AdjustmentSection(
         ) {
             StepCard(
                 icon = Icons.Default.Remove,
+                contentDescription = stringResource(R.string.cd_decrease),
                 enabled = canDecrease,
                 focusRequester = minusFocusRequester,
                 leftFocusRequester = minusLeftFocusRequester,
                 rightFocusRequester = if (canIncrease) plusFocusRequester else FocusRequester.Default,
                 upFocusRequester = upFocusRequester,
                 downFocusRequester = downFocusRequester,
-                onClick = onDecrease
+                onClick = onDecrease,
+                onHoldTick = onDecreaseHold
             )
             StepCard(
                 icon = Icons.Default.Add,
+                contentDescription = stringResource(R.string.cd_increase),
                 enabled = canIncrease,
                 focusRequester = plusFocusRequester,
                 leftFocusRequester = plusLeftFocusRequester,
                 upFocusRequester = upFocusRequester,
                 downFocusRequester = downFocusRequester,
-                onClick = onIncrease
+                onClick = onIncrease,
+                onHoldTick = onIncreaseHold
             )
         }
 
@@ -781,20 +886,50 @@ private fun AdjustmentSection(
 @Composable
 private fun StepCard(
     icon: ImageVector,
+    contentDescription: String,
     enabled: Boolean,
     focusRequester: FocusRequester,
     leftFocusRequester: FocusRequester,
     rightFocusRequester: FocusRequester = FocusRequester.Default,
     upFocusRequester: FocusRequester? = null,
     downFocusRequester: FocusRequester? = null,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onHoldTick: ((Int) -> Unit)? = null
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+
+    if (onHoldTick != null) {
+        val isPressed by interactionSource.collectIsPressedAsState()
+        val latestOnHoldTick by rememberUpdatedState(onHoldTick)
+        LaunchedEffect(isPressed, enabled) {
+            if (!isPressed || !enabled) return@LaunchedEffect
+            // Let the initial click apply its normal (small) step; only start
+            // auto-repeating once the button has been held down continuously.
+            // The repeat step itself ramps up the longer the hold continues:
+            // AUDIO_DELAY_HOLD_STEP_MS after AUDIO_DELAY_HOLD_THRESHOLD_MS,
+            // then AUDIO_DELAY_HOLD_FAST_STEP_MS after AUDIO_DELAY_HOLD_FAST_THRESHOLD_MS.
+            delay(AUDIO_DELAY_HOLD_THRESHOLD_MS)
+            var heldMs = AUDIO_DELAY_HOLD_THRESHOLD_MS
+            while (isActive) {
+                val step = if (heldMs >= AUDIO_DELAY_HOLD_FAST_THRESHOLD_MS) {
+                    AUDIO_DELAY_HOLD_FAST_STEP_MS
+                } else {
+                    AUDIO_DELAY_HOLD_STEP_MS
+                }
+                latestOnHoldTick(step)
+                delay(AUDIO_DELAY_HOLD_REPEAT_INTERVAL_MS)
+                heldMs += AUDIO_DELAY_HOLD_REPEAT_INTERVAL_MS
+            }
+        }
+    }
+
     Card(
         onClick = {
             if (enabled) {
                 onClick()
             }
         },
+        interactionSource = interactionSource,
         modifier = Modifier
             .width(NuvioTheme.spacing.huge)
             .focusRequester(focusRequester)
@@ -833,11 +968,19 @@ private fun StepCard(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = null,
+                contentDescription = contentDescription,
                 tint = if (enabled) Color.White else Color.White.copy(alpha = 0.35f)
             )
         }
     }
+}
+
+@Composable
+private fun nightModeLevelLabel(mode: NightMode): String = when (mode) {
+    NightMode.OFF -> stringResource(R.string.audio_night_mode_off)
+    NightMode.LIGHT -> stringResource(R.string.audio_night_mode_light)
+    NightMode.MEDIUM -> stringResource(R.string.audio_night_mode_medium)
+    NightMode.STRONG -> stringResource(R.string.audio_night_mode_strong)
 }
 
 private enum class AudioControlFocusTarget {

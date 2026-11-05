@@ -4,6 +4,7 @@ import com.nuvio.tv.R
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.data.local.AutoSkipSegmentType
 import com.nuvio.tv.data.repository.SkipInterval
+import com.nuvio.tv.data.repository.segmentCategory
 import com.nuvio.tv.domain.model.ContentType
 import com.nuvio.tv.domain.model.Meta
 import com.nuvio.tv.domain.model.Stream
@@ -271,10 +272,12 @@ internal fun PlayerRuntimeController.recomputeNextEpisode(resetVisibility: Boole
             currentEpisode = episode
         )
     } else {
-        PlayerNextEpisodeRules.resolveNextEpisode(
-            videos = metaVideos,
-            currentSeason = season,
-            currentEpisode = episode
+        val shuffleState = playbackShuffleState ?: run {
+            clearNextEpisodeAndCancelPostPlay()
+            return
+        }
+        episodeShufflePlayback.nextEpisode(
+            profileId, contentId.orEmpty(), metaVideos, season, episode, shuffleState
         )
     }
 
@@ -294,6 +297,7 @@ internal fun PlayerRuntimeController.recomputeNextEpisode(resetVisibility: Boole
         overview = resolvedNext.overview,
         released = resolvedNext.released,
         hasAired = hasAired,
+        available = resolvedNext.available,
         unairedMessage = if (hasAired) {
             null
         } else {
@@ -398,6 +402,26 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
     if (state.postPlayMode != null || state.postPlayDismissedForCurrentEpisode) return
 
     val effectiveDuration = effectiveDurationEarly
+
+    // Preload: start fetching sources for next episode before the button appears.
+    if (preloadNextEpisodeSourcesSetting && !nextEpisodePreloadTriggered && state.nextEpisode != null) {
+        val preloadLeadMs = maxOf(streamAutoPlayTimeoutSecondsSetting.toLong() * 1_000L, 10_000L)
+            .coerceAtMost(30_000L)
+        val shouldPreloadByCard = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(
+            positionMs = positionMs + preloadLeadMs,
+            durationMs = effectiveDuration,
+            skipIntervals = skipIntervals,
+            thresholdMode = nextEpisodeThresholdModeSetting,
+            thresholdPercent = nextEpisodeThresholdPercentSetting,
+            thresholdMinutesBeforeEnd = nextEpisodeThresholdMinutesBeforeEndSetting
+        )
+        val shouldPreloadByEnd = effectiveDuration > 0L &&
+            (effectiveDuration - positionMs) <= preloadLeadMs
+        if (shouldPreloadByCard || shouldPreloadByEnd) {
+            preloadNextEpisodeSources()
+        }
+    }
+
     val shouldShow = PlayerNextEpisodeRules.shouldShowNextEpisodeCard(
         positionMs = positionMs,
         durationMs = effectiveDuration,
@@ -441,6 +465,10 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
     if (shouldEnterStillWatching) {
         enterStillWatchingPromptMode()
     } else {
+        val ne = state.nextEpisode
+        val isUnplayable = !ne.hasAired ||
+            (ne.released.isNullOrBlank() && ne.available == false)
+        if (isUnplayable) return
         // Fork: a stream chosen ahead of time means there is nothing to wait for, so cut
         // straight to it without ever showing the searching card. This is the whole point
         // of the prefetch - the card was only ever a progress indicator for the search.
@@ -471,7 +499,7 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
         _uiState.update {
             it.copy(postPlayMode = PostPlayMode.AutoPlay(nextEpisode = state.nextEpisode))
         }
-        if (state.nextEpisode.hasAired && streamAutoPlayNextEpisodeEnabledSetting) {
+        if (streamAutoPlayNextEpisodeEnabledSetting) {
             playNextEpisode()
         }
     }
@@ -513,11 +541,13 @@ internal fun PlayerRuntimeController.updateActiveSkipInterval(positionMs: Long) 
     if (active != null) {
         val targetsPostCredits = active.followingPostCreditsScene(skipIntervals, currentPlaybackDurationMs()) != null
         if (currentActive != active || targetsPostCredits != _uiState.value.activeSkipTargetsPostCredits) {
+            val keepDismissed = currentActive != null &&
+                segmentCategory(currentActive.type) == segmentCategory(active.type)
             lastActiveSkipType = active.type
             _uiState.update { it.copy(
                 activeSkipInterval = active,
                 activeSkipTargetsPostCredits = targetsPostCredits,
-                skipIntervalDismissed = false
+                skipIntervalDismissed = if (keepDismissed) it.skipIntervalDismissed else false
             ) }
         }
         val segmentType = AutoSkipSegmentType.fromSkipIntervalType(active.type)
@@ -525,13 +555,31 @@ internal fun PlayerRuntimeController.updateActiveSkipInterval(positionMs: Long) 
         if (
             segmentType != null &&
             segmentType in autoSkipSegmentTypes &&
-            activeKey !in autoSkippedIntervalKeys
+            activeKey !in autoSkippedIntervalKeys &&
+            !isPartyControlLocked
         ) {
             autoSkippedIntervalKeys.add(activeKey)
             skipInterval(active)
         }
     } else if (currentActive != null) {
-        _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = false) }
+        // When the same segment type exists just ahead (within 2s), swap to keep the button
+        // visible during the brief gap when chapters replace an API interval with a slightly
+        // later start time. The 2s tolerance covers the typical 1s "Scene 1" -> "Recap" gap.
+        val positionSec = positionMs / 1000.0
+        val replacement = skipIntervals.firstOrNull {
+            segmentCategory(it.type) == segmentCategory(currentActive.type) &&
+                positionSec < it.startTime &&
+                it.startTime - positionSec <= 2.0
+        }
+        if (replacement != null) {
+            val targetsPostCredits = replacement.followingPostCreditsScene(skipIntervals, currentPlaybackDurationMs()) != null
+            _uiState.update { it.copy(
+                activeSkipInterval = replacement,
+                activeSkipTargetsPostCredits = targetsPostCredits
+            ) }
+        } else {
+            _uiState.update { it.copy(activeSkipInterval = null, skipIntervalDismissed = false) }
+        }
     }
 }
 

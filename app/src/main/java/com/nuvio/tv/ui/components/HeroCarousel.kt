@@ -1,5 +1,11 @@
 package com.nuvio.tv.ui.components
 
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+
 import com.nuvio.tv.ui.theme.NuvioTheme
 
 import android.graphics.ColorSpace
@@ -52,6 +58,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +97,8 @@ fun HeroCarousel(
     showBackdrop: Boolean = true,
     fullWidth: Dp = Dp.Unspecified,
     initialActiveIndex: Int = 0,
+    mdbListShowOnHero: Boolean = false,
+    mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER,
     modifier: Modifier = Modifier
 ) {
     if (items.isEmpty()) return
@@ -134,7 +144,16 @@ fun HeroCarousel(
             .onFocusChanged {
                 isFocused = it.hasFocus || it.isFocused
             }
+            .semantics { this.contentDescription = items.getOrNull(activeIndex)?.name.orEmpty() }
             .focusable()
+            .semantics {
+                role = Role.Button
+                contentDescription = items[activeIndex].name
+                onClick {
+                    currentOnItemClick(items[activeIndex])
+                    true
+                }
+            }
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) {
                     when (event.key) {
@@ -174,7 +193,9 @@ fun HeroCarousel(
             HeroCarouselSlide(
                 item = item,
                 showImdbRatings = showImdbRatings,
-                showBackdrop = showBackdrop
+                showBackdrop = showBackdrop,
+                mdbListShowOnHero = mdbListShowOnHero,
+                mdbListRatingOrder = mdbListRatingOrder
             )
         }
 
@@ -220,7 +241,9 @@ fun HeroCarousel(
 private fun HeroCarouselSlide(
     item: MetaPreview,
     showImdbRatings: Boolean,
-    showBackdrop: Boolean
+    showBackdrop: Boolean,
+    mdbListShowOnHero: Boolean = false,
+    mdbListRatingOrder: List<String> = com.nuvio.tv.domain.model.MDBListSettings.DEFAULT_RATING_ORDER
 ) {
     val highlighterEnabled = LocalRecompositionHighlighterEnabled.current
     val context = LocalContext.current
@@ -346,27 +369,39 @@ private fun HeroCarouselSlide(
                                 )
                             }
                             if (ratingText != null) {
-                                if (trailingMetadata.isNotEmpty()) HeroCarouselMetaDivider()
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
-                                ) {
-                                    ImdbRatingSourceLabel(
-                                        logoModifier = Modifier.size(30.dp),
-                                        textStyle = MaterialTheme.typography.labelMedium,
-                                        textColor = NuvioTheme.colors.TextSecondary
-                                    )
-                                    Text(
-                                        text = ratingText,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = NuvioTheme.colors.TextSecondary,
-                                        maxLines = 1
-                                    )
+                                val mdbRatings = item.mdbListRatings
+                                if (mdbListShowOnHero && mdbRatings != null && !mdbRatings.isEmpty()) {
+                                } else {
+                                    if (trailingMetadata.isNotEmpty()) HeroCarouselMetaDivider()
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(NuvioTheme.spacing.xs)
+                                    ) {
+                                        ImdbRatingSourceLabel(
+                                            logoModifier = Modifier.size(NuvioTheme.spacing.xl),
+                                            textStyle = MaterialTheme.typography.labelMedium,
+                                            textColor = NuvioTheme.colors.TextSecondary
+                                        )
+                                        Text(
+                                            text = ratingText,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = NuvioTheme.colors.TextSecondary,
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            if (mdbListShowOnHero && item.mdbListRatings != null && !item.mdbListRatings.isEmpty()) {
+                MDBListRatingsRow(
+                    ratings = item.mdbListRatings,
+                    order = mdbListRatingOrder,
+                    maxItems = 6
+                )
             }
 
             item.description?.takeIf { it.isNotBlank() }?.let { description ->
