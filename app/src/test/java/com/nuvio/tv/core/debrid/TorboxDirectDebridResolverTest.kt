@@ -202,14 +202,14 @@ class TorboxDirectDebridResolverTest {
         assertTrue(resolver.hasPreparedTorboxDeliveryUrl(refreshed.url))
 
         assertNull(resolver.refreshPreparedTorboxUrl(refreshed.url))
-        assertEquals(3, api.createCalls)
+        assertEquals(2, api.createCalls)
         assertFalse(resolver.hasPreparedTorboxDeliveryUrl(refreshed.url))
 
         // The next playback of that file resolves afresh rather than replaying the rejected link.
         api.linkUrlFor = { fileId -> linkSuccess("file-$fileId-v3.mkv") }
         val afresh = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
         assertEquals("https://cdn.example/file-3-v3.mkv", afresh.url)
-        assertEquals(4, api.createCalls)
+        assertEquals(3, api.createCalls)
     }
 
     @Test
