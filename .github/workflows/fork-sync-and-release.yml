@@ -243,7 +243,7 @@ jobs:
 
       - name: Build release APKs
         if: steps.decide.outputs.proceed == 'true'
-        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 3600 --wait 120 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} -PforkLowMemoryRelease=${{ github.event_name == ''schedule'' || inputs.low_memory }} --no-daemon --max-workers=2 --build-cache --stacktrace'
+        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 2400 --wait 1800 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} -PforkLowMemoryRelease=${{ github.event_name == ''schedule'' || inputs.low_memory }} --no-daemon --max-workers=2 --build-cache --stacktrace'
 
       # Keep the APKs even if publishing fails. This build is the better part of an
       # hour, and losing it to a bad token or a rate limit at the last step is a waste
