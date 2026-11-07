@@ -404,14 +404,52 @@ class StreamRepositoryImpl @Inject constructor(
                     }
                 }
 
-                // Emit results as they arrive
+                // Availability checks must not hold the result consumer: a slow check for
+                // one torrent group must not hide playable results from another source.
+                val availabilityResults = Channel<AddonStreams>(Channel.UNLIMITED)
+                val pendingChecks = LinkedHashMap<String, AddonStreams>()
+                var activeChecks = 0
+                fun scheduleAvailabilityCheck(group: AddonStreams) {
+                    activeChecks++
+                    launch {
+                        val checked = try {
+                            localDebridAvailabilityService.annotateCachedAvailability(listOf(group)).firstOrNull() ?: group
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Availability check failed for ${group.addonName}: ${e.message}")
+                            group
+                        }
+                        availabilityResults.send(checked)
+                    }
+                }
+
+                // Emit results as they arrive. The consumer alone owns the published list.
                 for (result in resultChannel) {
                     val checkingResult = localDebridAvailabilityService.markChecking(listOf(result)).firstOrNull() ?: result
-                    val checkedResult = localDebridAvailabilityService.annotateCachedAvailability(listOf(checkingResult)).firstOrNull() ?: checkingResult
-                    mergePresentedResult(accumulatedResults, checkedResult, debridSettings)
+                    mergePresentedResult(accumulatedResults, checkingResult, debridSettings)
                     emit(NetworkResult.Success(accumulatedResults.toList()))
-                    Log.d(TAG, "Emitted ${accumulatedResults.size} addon(s), latest: ${checkedResult.addonName} with ${checkedResult.streams.size} streams")
+                    if (activeChecks < 2) {
+                        scheduleAvailabilityCheck(checkingResult)
+                    } else {
+                        pendingChecks[checkingResult.addonName] = checkingResult
+                    }
                 }
+
+                // Producer completion closes resultChannel. Drain every availability job,
+                // starting pending groups as slots become available.
+                while (activeChecks > 0 || pendingChecks.isNotEmpty()) {
+                    if (activeChecks < 2 && pendingChecks.isNotEmpty()) {
+                        val next = pendingChecks.entries.first()
+                        pendingChecks.remove(next.key)
+                        scheduleAvailabilityCheck(next.value)
+                    }
+                    val checked = availabilityResults.receive()
+                    activeChecks--
+                    mergePresentedResult(accumulatedResults, checked, debridSettings)
+                    emit(NetworkResult.Success(accumulatedResults.toList()))
+                }
+                availabilityResults.close()
             }
 
             // Emit final result (even if empty)
