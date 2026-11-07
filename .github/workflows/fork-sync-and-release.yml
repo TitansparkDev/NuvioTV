@@ -18,6 +18,10 @@ on:
         description: Build and release even if upstream has not moved
         type: boolean
         default: false
+      low_memory:
+        description: Use signed production packaging without R8 (larger APKs)
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -239,7 +243,7 @@ jobs:
 
       - name: Build release APKs
         if: steps.decide.outputs.proceed == 'true'
-        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 3600 --wait 120 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} --no-daemon --max-workers=2 --build-cache --stacktrace'
+        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 3600 --wait 120 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} -PforkLowMemoryRelease=${{ github.event_name == ''schedule'' || inputs.low_memory }} --no-daemon --max-workers=2 --build-cache --stacktrace'
 
       # Keep the APKs even if publishing fails. This build is the better part of an
       # hour, and losing it to a bad token or a rate limit at the last step is a waste
@@ -275,6 +279,10 @@ jobs:
           {
             echo "Automatic build of NuvioTV ${BASE_VERSION} with the fork's shuffle button and Dialogue Leveler."
             echo
+            if [[ "${{ github.event_name == 'schedule' || inputs.low_memory }}" == "true" ]]; then
+              echo "Signed production build with code and resource shrinking disabled to fit the build machine's memory limit. APKs are larger than optimized builds."
+              echo
+            fi
             echo "Upstream: NuvioMedia/NuvioTV at [\`${UPSTREAM_SHA:0:7}\`](https://github.com/NuvioMedia/NuvioTV/commit/${UPSTREAM_SHA}) - ${upstream_subject}"
             echo
             echo "Notes for the upstream changes are on [their releases page](https://github.com/NuvioMedia/NuvioTV/releases)."
