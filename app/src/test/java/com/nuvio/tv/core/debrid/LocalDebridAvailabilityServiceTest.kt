@@ -52,6 +52,31 @@ class LocalDebridAvailabilityServiceTest {
     }
 
     @Test
+    fun `overlapping hashes are checked once and uncached files are never downloaded`() = runTest {
+        val localDebridService = mockk<LocalDebridService>()
+        var checks = 0
+        coEvery { localDebridService.checkCached(any(), any()) } coAnswers {
+            checks++
+            assertEquals(listOf("abc123", "def456"), secondArg())
+            mapOf("abc123" to LocalDebridCachedItem(name = "cached.mkv", size = 123L))
+        }
+        coEvery { localDebridService.isCached(any(), any()) } returns false
+        val service = service(localDebridService)
+        val first = stream(infoHash = "ABC123")
+        val overlap = stream(name = "Duplicate", infoHash = "abc123")
+        val uncached = stream(name = "Uncached", infoHash = "DEF456")
+
+        val result = service.annotateCachedAvailability(
+            listOf(group(listOf(first, uncached)), group(listOf(overlap)))
+        )
+
+        assertEquals(1, checks)
+        assertEquals(StreamDebridCacheState.CACHED, result[0].streams[0].debridCacheStatus?.state)
+        assertEquals(StreamDebridCacheState.NOT_CACHED, result[0].streams[1].debridCacheStatus?.state)
+        assertEquals(StreamDebridCacheState.CACHED, result[1].streams[0].debridCacheStatus?.state)
+    }
+
+    @Test
     fun `annotateCachedAvailability marks unknown when provider check fails`() = runTest {
         val localDebridService = mockk<LocalDebridService>()
         coEvery {
