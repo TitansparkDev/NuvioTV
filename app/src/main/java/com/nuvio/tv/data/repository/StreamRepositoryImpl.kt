@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import java.net.URLEncoder
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -424,30 +425,37 @@ class StreamRepositoryImpl @Inject constructor(
                     }
                 }
 
-                // Emit results as they arrive. The consumer alone owns the published list.
-                for (result in resultChannel) {
-                    val checkingResult = localDebridAvailabilityService.markChecking(listOf(result)).firstOrNull() ?: result
-                    mergePresentedResult(accumulatedResults, checkingResult, debridSettings)
-                    emit(NetworkResult.Success(accumulatedResults.toList()))
-                    if (activeChecks < 2) {
-                        scheduleAvailabilityCheck(checkingResult)
-                    } else {
-                        pendingChecks[checkingResult.addonName] = checkingResult
+                // One consumer owns accumulatedResults and handles source arrivals and
+                // check completions together, so completed checks immediately free slots.
+                var sourcesDone = false
+                while (!sourcesDone || activeChecks > 0 || pendingChecks.isNotEmpty()) {
+                    select<Unit> {
+                        if (!sourcesDone) resultChannel.onReceiveCatching { received ->
+                            val result = received.getOrNull()
+                            if (result == null) {
+                                sourcesDone = true
+                            } else {
+                                val checkingResult = localDebridAvailabilityService.markChecking(listOf(result)).firstOrNull() ?: result
+                                mergePresentedResult(accumulatedResults, checkingResult, debridSettings)
+                                emit(NetworkResult.Success(accumulatedResults.toList()))
+                                if (activeChecks < 2) {
+                                    scheduleAvailabilityCheck(checkingResult)
+                                } else {
+                                    pendingChecks[checkingResult.addonName] = checkingResult
+                                }
+                            }
+                        }
+                        if (activeChecks > 0) availabilityResults.onReceive { checked ->
+                            activeChecks--
+                            mergePresentedResult(accumulatedResults, checked, debridSettings)
+                            emit(NetworkResult.Success(accumulatedResults.toList()))
+                            if (pendingChecks.isNotEmpty()) {
+                                val next = pendingChecks.entries.first()
+                                pendingChecks.remove(next.key)
+                                scheduleAvailabilityCheck(next.value)
+                            }
+                        }
                     }
-                }
-
-                // Producer completion closes resultChannel. Drain every availability job,
-                // starting pending groups as slots become available.
-                while (activeChecks > 0 || pendingChecks.isNotEmpty()) {
-                    if (activeChecks < 2 && pendingChecks.isNotEmpty()) {
-                        val next = pendingChecks.entries.first()
-                        pendingChecks.remove(next.key)
-                        scheduleAvailabilityCheck(next.value)
-                    }
-                    val checked = availabilityResults.receive()
-                    activeChecks--
-                    mergePresentedResult(accumulatedResults, checked, debridSettings)
-                    emit(NetworkResult.Success(accumulatedResults.toList()))
                 }
                 availabilityResults.close()
             }
