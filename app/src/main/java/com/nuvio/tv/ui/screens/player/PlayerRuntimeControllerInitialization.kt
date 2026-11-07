@@ -1641,6 +1641,16 @@ internal fun PlayerRuntimeController.initializePlayer(
                             return
                         }
 
+                        if (tryRefreshPreparedDebridLink(
+                            error = error,
+                            detailedError = detailedError,
+                            allowEngineFailover = allowEngineFailover,
+                            savedPosition = currentPosition,
+                            paused = userPausedManually
+                        )) {
+                            return
+                        }
+
                         if (tryParsingErrorProbeFallback(
                             error = error,
                             detailedError = detailedError,

@@ -4,6 +4,7 @@ import android.util.Log
 import com.nuvio.tv.data.local.DebridSettingsDataStore
 import com.nuvio.tv.data.remote.api.TorboxApi
 import com.nuvio.tv.data.remote.dto.TorboxCreateTorrentDataDto
+import com.nuvio.tv.data.remote.dto.TorboxEnvelopeDto
 import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamClientResolve
 import kotlinx.coroutines.CancellationException
@@ -16,6 +17,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "TorboxResolver"
+private const val MAX_ENVELOPE_TEXT_CHARS = 2_048
 
 @Singleton
 class TorboxDirectDebridResolver @Inject constructor(
@@ -46,7 +48,7 @@ class TorboxDirectDebridResolver @Inject constructor(
                 allowZip = "false".toTextPart()
             )
             Log.d(TAG, "resolve: createTorrent done in ${System.currentTimeMillis() - createStartMs}ms code=${create.code()}")
-            val torrentId = create.extractTorrentId() ?: return create.toFailureForCreate()
+            val torrentId = create.extractTorrentId() ?: return create.toFailureResult("createTorrent")
 
             Log.d(TAG, "resolve: getTorrent id=$torrentId")
             val getTorrentStartMs = System.currentTimeMillis()
@@ -56,7 +58,7 @@ class TorboxDirectDebridResolver @Inject constructor(
                 bypassCache = true
             )
             Log.d(TAG, "resolve: getTorrent done in ${System.currentTimeMillis() - getTorrentStartMs}ms code=${torrent.code()}")
-            if (!torrent.isSuccessful) return DirectDebridResolveResult.Stale
+            if (!torrent.isSuccessful) return torrent.toFailureResult("getTorrent")
             val files = torrent.body()?.data?.files.orEmpty()
             val file = fileSelector.selectFile(files, resolve, season, episode)
                 ?: return DirectDebridResolveResult.Stale
@@ -74,9 +76,9 @@ class TorboxDirectDebridResolver @Inject constructor(
                 appendName = false
             )
             Log.d(TAG, "resolve: requestDownloadLink done in ${System.currentTimeMillis() - linkStartMs}ms code=${link.code()}")
-            if (!link.isSuccessful) return DirectDebridResolveResult.Stale
+            if (!link.isSuccessful) return link.toFailureResult("requestDownloadLink")
             val url = link.body()?.data?.takeIf { it.isNotBlank() }
-                ?: return DirectDebridResolveResult.Stale
+                ?: return link.toFailureResult("requestDownloadLink")
 
             DirectDebridResolveResult.Success(
                 url = url,
@@ -90,19 +92,11 @@ class TorboxDirectDebridResolver @Inject constructor(
         }
     }
 
-    private fun Response<com.nuvio.tv.data.remote.dto.TorboxEnvelopeDto<TorboxCreateTorrentDataDto>>.extractTorrentId(): Int? {
+    private fun Response<TorboxEnvelopeDto<TorboxCreateTorrentDataDto>>.extractTorrentId(): Int? {
         if (!isSuccessful) return null
         val body = body()
         if (body?.success == false) return null
         return body?.data?.resolvedTorrentId()
-    }
-
-    private fun Response<com.nuvio.tv.data.remote.dto.TorboxEnvelopeDto<TorboxCreateTorrentDataDto>>.toFailureForCreate(): DirectDebridResolveResult {
-        return when (code()) {
-            401, 403 -> DirectDebridResolveResult.Error
-            409 -> DirectDebridResolveResult.NotCached
-            else -> DirectDebridResolveResult.Stale
-        }
     }
 
     private fun buildMagnetUri(resolve: StreamClientResolve): String? {
@@ -123,6 +117,100 @@ class TorboxDirectDebridResolver @Inject constructor(
         return toRequestBody("text/plain".toMediaType())
     }
 }
+
+/** How a TorBox API response that did not yield a usable link should be read. */
+internal enum class TorboxFailureKind {
+    /** Credentials rejected. Says nothing about the torrent or the delivery link. */
+    UNAUTHORIZED,
+    RATE_LIMITED,
+    /** The torrent is not cached and the request was limited to cached torrents. */
+    NOT_CACHED,
+    /** The torrent or file is no longer usable; a fresh stream search may find another. */
+    STALE,
+    /** A server-side failure we cannot attribute to the torrent, the key, or the limits. */
+    UNKNOWN
+}
+
+/**
+ * Classifies a failed TorBox response from its HTTP status and the envelope's error/detail text.
+ * Text is read for every status, so a cached-only refusal is recognised whatever status it arrives
+ * with; the status alone decides only when the text is silent.
+ */
+internal fun torboxFailureKind(httpCode: Int, envelopeText: String): TorboxFailureKind {
+    val text = envelopeText.lowercase()
+    return when {
+        httpCode == 401 || httpCode == 403 || text.containsAny(TORBOX_AUTH_MARKERS) -> TorboxFailureKind.UNAUTHORIZED
+        httpCode == 429 || text.containsAny(TORBOX_RATE_LIMIT_MARKERS) -> TorboxFailureKind.RATE_LIMITED
+        httpCode == 409 || text.containsAny(TORBOX_NOT_CACHED_MARKERS) -> TorboxFailureKind.NOT_CACHED
+        httpCode in 500..599 -> TorboxFailureKind.UNKNOWN
+        else -> TorboxFailureKind.STALE
+    }
+}
+
+private fun TorboxFailureKind.toResult(): DirectDebridResolveResult = when (this) {
+    TorboxFailureKind.NOT_CACHED -> DirectDebridResolveResult.NotCached
+    TorboxFailureKind.STALE -> DirectDebridResolveResult.Stale
+    TorboxFailureKind.UNAUTHORIZED,
+    TorboxFailureKind.RATE_LIMITED,
+    TorboxFailureKind.UNKNOWN -> DirectDebridResolveResult.Error
+}
+
+private fun <T> Response<TorboxEnvelopeDto<T>>.toFailureResult(operation: String): DirectDebridResolveResult {
+    val kind = torboxFailureKind(httpCode = code(), envelopeText = envelopeFailureText())
+    Log.w(TAG, "$operation did not return a link: kind=$kind http=${code()}")
+    return kind.toResult()
+}
+
+/**
+ * The envelope's error and detail text. A success body is read through the typed envelope; an error
+ * body is read from its raw JSON, because Retrofit leaves [Response.body] empty for error statuses.
+ */
+private fun <T> Response<TorboxEnvelopeDto<T>>.envelopeFailureText(): String {
+    body()?.let { envelope ->
+        return listOfNotNull(envelope.error, envelope.detail).joinToString(" ")
+    }
+    val raw = runCatching { errorBody()?.use { it.string() } }.getOrNull()
+        .orEmpty()
+        .take(MAX_ENVELOPE_TEXT_CHARS)
+    return TORBOX_ENVELOPE_TEXT_FIELD.findAll(raw).joinToString(" ") { match -> match.groupValues[2] }
+}
+
+private val TORBOX_ENVELOPE_TEXT_FIELD = Regex("\"(error|detail)\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.){0,512})\"")
+
+private val TORBOX_AUTH_MARKERS = listOf(
+    "unauthorized",
+    "unauthenticated",
+    "not authenticated",
+    "authentication",
+    "auth_error",
+    "invalid token",
+    "invalid_token",
+    "api key",
+    "api_key",
+    "forbidden"
+)
+
+private val TORBOX_RATE_LIMIT_MARKERS = listOf(
+    "rate limit",
+    "rate_limit",
+    "ratelimit",
+    "too many requests"
+)
+
+private val TORBOX_NOT_CACHED_MARKERS = listOf(
+    "not cached",
+    "not_cached",
+    "notcached",
+    "uncached",
+    "not in cache",
+    "not_in_cache",
+    "only_if_cached",
+    "only if cached",
+    "cached only",
+    "cached_only"
+)
+
+private fun String.containsAny(markers: List<String>): Boolean = markers.any { contains(it) }
 
 sealed class DirectDebridResolveResult {
     data class Success(

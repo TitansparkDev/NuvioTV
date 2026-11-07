@@ -14,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,21 +28,30 @@ class DirectDebridResolver @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val mutex = Mutex()
-    private val resolvedCache = mutableMapOf<String, CachedDirectDebridResolve>()
+    // Writes hold [mutex]; reads that must not suspend (see [hasPreparedTorboxDeliveryUrl]) rely on this map being concurrent.
+    private val resolvedCache = ConcurrentHashMap<String, CachedDirectDebridResolve>()
     private val inFlightResolves = mutableMapOf<String, Deferred<DirectDebridResolveResult>>()
 
     suspend fun resolve(
         stream: Stream,
         season: Int?,
         episode: Int?
+    ): DirectDebridResolveResult = resolveInternal(stream, season, episode, refreshed = false)
+
+    private suspend fun resolveInternal(
+        stream: Stream,
+        season: Int?,
+        episode: Int?,
+        refreshed: Boolean
     ): DirectDebridResolveResult {
         if (!shouldResolveToPlayableStream(stream)) {
             return DirectDebridResolveResult.Stale
         }
-        val cacheKey = stream.directDebridResolveCacheKey(season, episode)
-        if (cacheKey == null) {
+        val identity = stream.directDebridResolveIdentity(season, episode)
+        if (identity == null) {
             return resolveUncached(stream, season, episode)
         }
+        val cacheKey = identity.key
         getCachedResult(cacheKey)?.let {
             return it
         }
@@ -77,7 +87,15 @@ class DirectDebridResolver @Inject constructor(
                 mutex.withLock {
                     resolvedCache[cacheKey] = CachedDirectDebridResolve(
                         result = result,
-                        cachedAtMs = System.currentTimeMillis()
+                        cachedAtMs = System.currentTimeMillis(),
+                        original = DirectDebridOriginal(
+                            stream = stream,
+                            season = season,
+                            episode = episode,
+                            providerId = identity.providerId,
+                            credentialFingerprint = identity.credentialFingerprint
+                        ),
+                        refreshed = refreshed
                     )
                 }
             }
@@ -93,9 +111,48 @@ class DirectDebridResolver @Inject constructor(
         }
     }
 
+    /**
+     * Re-resolves the stored original of the prepared TorBox link [url] once, for a link the player
+     * saw rejected. Only that entry is invalidated; other episodes and accounts keep their links.
+     *
+     * Returns null when [url] is not a prepared TorBox link of the current account, and when [url]
+     * is itself a refreshed link that was rejected again (its entry is dropped, so the next playback
+     * resolves afresh rather than replaying the rejected link).
+     */
+    suspend fun refreshPreparedTorboxUrl(url: String): DirectDebridResolveResult? {
+        val (cacheKey, prepared) = mutex.withLock {
+            resolvedCache.entries
+                .firstOrNull { (_, cached) -> cached.isPreparedTorboxDelivery(url) }
+                ?.let { entry -> entry.key to entry.value }
+        } ?: return null
+
+        val original = prepared.original
+        val current = original.stream.directDebridResolveIdentity(original.season, original.episode)
+        if (current == null ||
+            current.key != cacheKey ||
+            current.providerId != DebridProviders.TORBOX_ID ||
+            current.credentialFingerprint != original.credentialFingerprint
+        ) {
+            return null
+        }
+
+        mutex.withLock {
+            resolvedCache.remove(cacheKey, prepared)
+        }
+        if (prepared.refreshed) return null
+        return resolveInternal(original.stream, original.season, original.episode, refreshed = true)
+    }
+
+    /**
+     * Synchronous check for the player's error path: whether [url] is a TorBox delivery link this
+     * resolver prepared in memory. It does not check the account; [refreshPreparedTorboxUrl] does.
+     */
+    fun hasPreparedTorboxDeliveryUrl(url: String): Boolean =
+        resolvedCache.values.any { cached -> cached.isPreparedTorboxDelivery(url) }
+
     suspend fun cachedPlayableStream(stream: Stream, season: Int?, episode: Int?): Stream? {
         if (!shouldResolveToPlayableStream(stream)) return null
-        val cacheKey = stream.directDebridResolveCacheKey(season, episode) ?: return null
+        val cacheKey = stream.directDebridResolveIdentity(season, episode)?.key ?: return null
         return getCachedResult(cacheKey)?.let { result -> stream.withResolvedDebridUrl(result) }
     }
 
@@ -158,21 +215,27 @@ class DirectDebridResolver @Inject constructor(
         }
     }
 
-    private suspend fun Stream.directDebridResolveCacheKey(season: Int?, episode: Int?): String? {
+    /**
+     * The cache identity of [this] stream under the current account, or null when it cannot be
+     * resolved under that account. [DirectDebridResolveIdentity.key] is the cache key.
+     */
+    private suspend fun Stream.directDebridResolveIdentity(season: Int?, episode: Int?): DirectDebridResolveIdentity? {
         if (needsLocalDebridResolve()) {
             val settings = dataStore.settings.first()
             val account = localTorrentResolveCredential(settings) ?: return null
             val apiKey = account.apiKey.trim().takeIf { it.isNotBlank() } ?: return null
             val identity = getEffectiveInfoHash() ?: torrentMagnetUri() ?: behaviorHints?.filename ?: return null
-            return listOf(
+            val fingerprint = apiKey.stableFingerprint()
+            val key = listOf(
                 account.provider.id,
-                apiKey.stableFingerprint(),
+                fingerprint,
                 identity.trim().lowercase(),
                 getEffectiveFileIdx()?.toString().orEmpty(),
                 behaviorHints?.filename.orEmpty().trim().lowercase(),
                 season?.toString().orEmpty(),
                 episode?.toString().orEmpty()
             ).joinToString("|")
+            return DirectDebridResolveIdentity(key, account.provider.id, fingerprint)
         }
         val resolve = clientResolve ?: return null
         val providerId = DebridProviders.byId(resolve.service)?.id ?: return null
@@ -184,16 +247,18 @@ class DirectDebridResolver @Inject constructor(
             ?: resolve.torrentName
             ?: resolve.filename
             ?: return null
+        val fingerprint = apiKey.stableFingerprint()
 
-        return listOf(
+        val key = listOf(
             providerId,
-            apiKey.stableFingerprint(),
+            fingerprint,
             identity.trim().lowercase(),
             resolve.fileIdx?.toString().orEmpty(),
             (resolve.filename ?: behaviorHints?.filename).orEmpty().trim().lowercase(),
             (season ?: resolve.season)?.toString().orEmpty(),
             (episode ?: resolve.episode)?.toString().orEmpty()
         ).joinToString("|")
+        return DirectDebridResolveIdentity(key, providerId, fingerprint)
     }
 
     private suspend fun resolveLocalTorrentStream(
@@ -259,10 +324,32 @@ class DirectDebridResolver @Inject constructor(
 
 private const val DIRECT_DEBRID_RESOLVE_CACHE_TTL_MS = 15L * 60L * 1000L
 
+/** A stream's cache identity under one account: the cache [key], its provider, and a fingerprint of its API key. */
+private data class DirectDebridResolveIdentity(
+    val key: String,
+    val providerId: String,
+    val credentialFingerprint: String
+)
+
+/** The unresolved stream a prepared link was made from, so it can be resolved again. */
+private data class DirectDebridOriginal(
+    val stream: Stream,
+    val season: Int?,
+    val episode: Int?,
+    val providerId: String,
+    val credentialFingerprint: String
+)
+
 private data class CachedDirectDebridResolve(
     val result: DirectDebridResolveResult.Success,
-    val cachedAtMs: Long
+    val cachedAtMs: Long,
+    val original: DirectDebridOriginal,
+    /** True for a link produced by [DirectDebridResolver.refreshPreparedTorboxUrl]; such a link is not refreshed again. */
+    val refreshed: Boolean
 )
+
+private fun CachedDirectDebridResolve.isPreparedTorboxDelivery(url: String): Boolean =
+    original.providerId == DebridProviders.TORBOX_ID && result.url == url
 
 sealed class DirectDebridPlayableResult {
     data class Success(val stream: Stream) : DirectDebridPlayableResult()

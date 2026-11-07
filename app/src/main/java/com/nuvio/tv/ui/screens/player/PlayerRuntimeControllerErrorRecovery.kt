@@ -7,6 +7,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.R
+import com.nuvio.tv.core.debrid.DirectDebridResolveResult
 import com.nuvio.tv.core.util.findCause
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
@@ -467,6 +468,73 @@ internal fun PlayerRuntimeController.tryDv7HevcFallback(
             _uiState.update { it.copy(pendingSeekPosition = savedPosition) }
         }
         reinitializeCurrentStream(startPaused = paused)
+    }
+    return true
+}
+
+/** Delivery-link statuses that mean a prepared debrid link was rejected rather than the network failing. */
+private val PREPARED_LINK_REJECTED_STATUSES = setOf(403, 404, 410)
+
+/**
+ * Before first picture, a prepared TorBox delivery link rejected with 403/404/410 is re-resolved
+ * once from its stored original, without a new source search. Returns true when that attempt was
+ * started. When the refresh does not produce a link, the existing recovery chain runs as before.
+ */
+internal fun PlayerRuntimeController.tryRefreshPreparedDebridLink(
+    error: PlaybackException,
+    detailedError: String,
+    allowEngineFailover: Boolean,
+    savedPosition: Long,
+    paused: Boolean
+): Boolean {
+    if (hasRenderedFirstFrame) return false
+    val code = error.findInvalidResponseCodeException()?.responseCode ?: return false
+    if (code !in PREPARED_LINK_REJECTED_STATUSES) return false
+    val rejectedUrl = currentStreamUrl
+    if (!directDebridResolver.hasPreparedTorboxDeliveryUrl(rejectedUrl)) return false
+
+    Log.w(
+        PlayerRuntimeController.TAG,
+        "Prepared debrid link rejected with HTTP $code before first frame; re-resolving the same file once"
+    )
+
+    errorRetryJob?.cancel()
+    errorRetryJob = scope.launch {
+        showRecoveryOverlay()
+        val refreshed = directDebridResolver.refreshPreparedTorboxUrl(rejectedUrl)
+        if (refreshed is DirectDebridResolveResult.Success) {
+            Log.i(PlayerRuntimeController.TAG, "Prepared debrid link refreshed; restarting playback of the same file")
+            currentStreamUrl = refreshed.url
+            releasePlayer(flushPlaybackState = false)
+            if (savedPosition > 0L) {
+                _uiState.update { it.copy(pendingSeekPosition = savedPosition) }
+            }
+            reinitializeCurrentStream(startPaused = paused)
+            return@launch
+        }
+
+        Log.w(
+            PlayerRuntimeController.TAG,
+            "Prepared debrid link refresh gave ${refreshed?.javaClass?.simpleName ?: "no link"}; using the existing recovery"
+        )
+        if (maybeAutoSwitchInternalPlayerOnStartupError(detailedError = detailedError, allowEngineFailover = allowEngineFailover)) {
+            return@launch
+        }
+        if (attemptAutoRetry(error, detailedError)) {
+            return@launch
+        }
+        if (tryServerFallback()) {
+            return@launch
+        }
+        val userFacingError = error.toDisplayMessage(context)
+        _uiState.update {
+            it.copy(
+                error = userFacingError,
+                isBuffering = false,
+                showLoadingOverlay = false,
+                showPauseOverlay = false
+            )
+        }
     }
     return true
 }
