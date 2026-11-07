@@ -61,6 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -739,56 +740,40 @@ class StreamScreenViewModel @Inject constructor(
             var lastSuccessData: List<AddonStreams>? = null
             var autoSelectTriggered = false
             var timeoutElapsed = false
-            var debridPreparationLaunched = false
-            val isUnlimitedTimeout = playerSettings.streamAutoPlayTimeoutSeconds == PlayerSettings.STREAM_AUTOPLAY_TIMEOUT_UNLIMITED
-
-            fun launchDirectDebridPreparationIfNeeded(streamGroups: List<AddonStreams>) {
-                if (debridPreparationLaunched || streamGroups.none { group -> group.streams.any { it.isReadyForDebridPreparation() } }) {
-                    return
-                }
-                debridPreparationLaunched = true
-                // Off the main thread: each prepared link rewrites the whole stream list,
-                // and the badge job can make that update retry many times.
-                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            val debridPreparationUpdates = MutableStateFlow<List<AddonStreams>>(emptyList())
+            var debridPreparationUsed = false
+            launch(kotlinx.coroutines.Dispatchers.Default) {
+                debridPreparationUpdates.debounce(200).collect { groups ->
+                    if (debridPreparationUsed) return@collect
+                    val state = _uiState.value
+                    val visible = state.filteredStreams
+                    val eligible = visible.any { it.isReadyForDebridPreparation() }
+                    if (!eligible) return@collect
+                    debridPreparationUsed = true
                     directDebridStreamPreparer.prepare(
-                        streams = _uiState.value.allStreams,
+                        streams = visible,
                         season = season,
                         episode = episode,
                         playerSettings = playerSettings,
                         installedAddonNames = installedAddonOrder.toSet()
                     ) { original, prepared ->
-                        updateUiStateIfChanged { state ->
-                            val updatedGroups = directDebridStreamPreparer.replacePreparedStream(
-                                groups = state.addonStreams,
-                                original = original,
-                                prepared = prepared
-                            )
-                            if (updatedGroups == state.addonStreams) {
-                                state
-                            } else {
-                                val updatedAllStreams = updatedGroups.flatMap { addonStreams ->
-                                    addonStreams.streams
-                                }
-                                val currentFilter = state.selectedAddonFilter
-                                val fullFiltered = groupStreamsByProvider(if (currentFilter == null) {
-                                    updatedAllStreams
-                                } else {
-                                    updatedAllStreams.filter { it.addonName == currentFilter }
-                                })
-                                streamFilterFullList = fullFiltered
-                                val pageEnd = state.filteredStreams.size
-                                    .coerceAtLeast(STREAM_FILTER_PAGE_SIZE.coerceAtMost(fullFiltered.size))
-                                    .coerceAtMost(fullFiltered.size)
-                                state.copy(
-                                    addonStreams = updatedGroups,
-                                    allStreams = updatedAllStreams,
-                                    filteredStreams = if (pageEnd >= fullFiltered.size) fullFiltered
-                                        else fullFiltered.subList(0, pageEnd)
-                                )
+                        updateUiStateIfChanged { current ->
+                            if (current.videoId != videoId) return@updateUiStateIfChanged current
+                            val updatedGroups = directDebridStreamPreparer.replacePreparedStream(current.addonStreams, original, prepared)
+                            if (updatedGroups == current.addonStreams) current else {
+                                val all = updatedGroups.flatMap { it.streams }
+                                val full = groupStreamsByProvider(if (current.selectedAddonFilter == null) all else all.filter { it.addonName == current.selectedAddonFilter })
+                                streamFilterFullList = full
+                                current.copy(addonStreams = updatedGroups, allStreams = all, filteredStreams = full.take(current.filteredStreams.size.coerceAtLeast(STREAM_FILTER_PAGE_SIZE)))
                             }
                         }
                     }
                 }
+            }
+            val isUnlimitedTimeout = playerSettings.streamAutoPlayTimeoutSeconds == PlayerSettings.STREAM_AUTOPLAY_TIMEOUT_UNLIMITED
+
+            fun launchDirectDebridPreparationIfNeeded(streamGroups: List<AddonStreams>) {
+                debridPreparationUpdates.value = streamGroups
             }
 
             val streamLoadInner = launch {

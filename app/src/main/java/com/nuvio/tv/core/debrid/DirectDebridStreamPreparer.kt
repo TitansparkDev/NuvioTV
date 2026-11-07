@@ -40,7 +40,7 @@ class DirectDebridStreamPreparer @Inject constructor(
 
         val candidates = prioritizeCandidates(
             streams = streams,
-            limit = limit,
+            limit = 1,
             playerSettings = playerSettings,
             installedAddonNames = installedAddonNames
         )
