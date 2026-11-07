@@ -660,6 +660,7 @@ app/src/main/java/com/nuvio/tv/surpriseme/SurpriseMeSources.kt
 app/src/main/java/com/nuvio/tv/surpriseme/SurpriseMeViewModel.kt
 app/src/main/java/com/nuvio/tv/surpriseme/SurpriseRollAgainViewModel.kt
 app/src/main/java/com/nuvio/tv/ui/components/AutoResizeText.kt
+app/src/main/java/com/nuvio/tv/ui/components/AutoScrollingText.kt
 app/src/main/java/com/nuvio/tv/ui/components/AvatarPickerGrid.kt
 app/src/main/java/com/nuvio/tv/ui/components/BrandWordmark.kt
 app/src/main/java/com/nuvio/tv/ui/components/CardDepthEffect.kt
@@ -1213,6 +1214,8 @@ app/src/main/res/values-b+es+419/strings_servers.xml
 app/src/main/res/values-b+sr+Latn/strings.xml
 app/src/main/res/values-bg/strings.xml
 app/src/main/res/values-bn/strings.xml
+app/src/main/res/values-bn/strings_party.xml
+app/src/main/res/values-bn/strings_servers.xml
 app/src/main/res/values-bs/strings.xml
 app/src/main/res/values-cs/strings.xml
 app/src/main/res/values-da/strings.xml
@@ -1453,6 +1456,7 @@ app/src/test/java/com/nuvio/tv/data/remote/dto/mdblist/MDBListMediaResponseDtoTe
 app/src/test/java/com/nuvio/tv/data/remote/supabase/AvatarCatalogRefreshTest.kt
 app/src/test/java/com/nuvio/tv/data/remote/supabase/SupabaseProfileSetupCopyResultTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/AddonManifestPlaceholderTest.kt
+app/src/test/java/com/nuvio/tv/data/repository/AnimeSkipIntervalsTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/CatalogRepositoryMalformedEntryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/CatalogRepositoryTypeTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/GitHubContributorsRepositoryTest.kt
