@@ -17,6 +17,7 @@ import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.StreamClientResolve
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import okhttp3.MediaType.Companion.toMediaType
@@ -24,6 +25,8 @@ import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Response
@@ -123,6 +126,157 @@ class TorboxDirectDebridResolverTest {
         assertTrue(hasCheckCached)
     }
 
+    @Test
+    fun `failure kinds separate authentication rate limit cached refusal stale and server failures`() {
+        assertEquals(TorboxFailureKind.UNAUTHORIZED, torboxFailureKind(401, ""))
+        assertEquals(TorboxFailureKind.UNAUTHORIZED, torboxFailureKind(200, "Invalid API key"))
+        assertEquals(TorboxFailureKind.RATE_LIMITED, torboxFailureKind(429, ""))
+        assertEquals(TorboxFailureKind.RATE_LIMITED, torboxFailureKind(400, "RATE_LIMIT_EXCEEDED"))
+        assertEquals(TorboxFailureKind.NOT_CACHED, torboxFailureKind(400, "Torrent is not cached"))
+        assertEquals(TorboxFailureKind.NOT_CACHED, torboxFailureKind(409, ""))
+        assertEquals(TorboxFailureKind.STALE, torboxFailureKind(400, ""))
+        assertEquals(TorboxFailureKind.STALE, torboxFailureKind(404, "File not found"))
+        assertEquals(TorboxFailureKind.UNKNOWN, torboxFailureKind(503, ""))
+    }
+
+    @Test
+    fun `cached only refusal is read from the error envelope whatever its status`() = runTest {
+        val api = FakeTorboxApi(
+            createResponse = Response.error(
+                400,
+                """{"success":false,"error":"TORRENT_NOT_CACHED","detail":"Torrent is not cached"}""".toResponseBody(JSON)
+            )
+        )
+
+        val result = resolver(api).resolve(stream(fileIdx = 1), season = null, episode = null)
+
+        assertTrue(result is DirectDebridResolveResult.NotCached)
+        assertEquals(0, api.torrentCalls)
+    }
+
+    @Test
+    fun `rate limit and rejected api key are errors and never stale links`() = runTest {
+        val rateLimited = FakeTorboxApi(createResponse = Response.error(429, "{}".toResponseBody(JSON)))
+        assertTrue(resolver(rateLimited).resolve(stream(fileIdx = 1), season = null, episode = null) is DirectDebridResolveResult.Error)
+
+        val keyRejected = cachedApi(pmrFiles).apply {
+            linkUrlFor = null
+            linkResponse = Response.error(
+                401,
+                """{"success":false,"error":"UNAUTHORIZED","detail":"Invalid API key"}""".toResponseBody(JSON)
+            )
+        }
+        assertTrue(resolver(keyRejected).resolve(pmrStream(), season = 1, episode = 2) is DirectDebridResolveResult.Error)
+    }
+
+    @Test
+    fun `prepared link refresh re-resolves only its own episode once`() = runTest {
+        val settings = MutableStateFlow(torboxSettings("tb_token"))
+        val api = cachedApi(pmrFiles).apply { linkUrlFor = { fileId -> linkSuccess("file-$fileId-v1.mkv") } }
+        val resolver = directResolver(api, settings)
+        val episodeOne = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
+        val episodeTwo = resolver.resolve(episodeStream(2), season = 1, episode = 2) as DirectDebridResolveResult.Success
+        assertEquals(2, api.createCalls)
+        assertEquals(2, api.requestCalls)
+
+        api.linkUrlFor = { fileId -> linkSuccess("file-$fileId-v2.mkv") }
+        val refreshed = resolver.refreshPreparedTorboxUrl(episodeOne.url) as DirectDebridResolveResult.Success
+
+        assertEquals("https://cdn.example/file-3-v2.mkv", refreshed.url)
+        assertEquals(3, api.createCalls)
+        assertEquals(3, api.requestCalls)
+        assertEquals(3, api.lastFileId)
+        // Episode two keeps its own link and needs no TorBox call to read it back.
+        assertEquals(episodeTwo.url, resolver.cachedPlayableStream(episodeStream(2), 1, 2)?.url)
+        assertEquals(3, api.createCalls)
+    }
+
+    @Test
+    fun `refreshed link rejected again is not refreshed a second time`() = runTest {
+        val settings = MutableStateFlow(torboxSettings("tb_token"))
+        val api = cachedApi(pmrFiles).apply { linkUrlFor = { fileId -> linkSuccess("file-$fileId-v1.mkv") } }
+        val resolver = directResolver(api, settings)
+        val original = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
+        api.linkUrlFor = { fileId -> linkSuccess("file-$fileId-v2.mkv") }
+        val refreshed = resolver.refreshPreparedTorboxUrl(original.url) as DirectDebridResolveResult.Success
+        assertTrue(resolver.hasPreparedTorboxDeliveryUrl(refreshed.url))
+
+        assertNull(resolver.refreshPreparedTorboxUrl(refreshed.url))
+        assertEquals(2, api.createCalls)
+        assertFalse(resolver.hasPreparedTorboxDeliveryUrl(refreshed.url))
+
+        // The next playback of that file resolves afresh rather than replaying the rejected link.
+        api.linkUrlFor = { fileId -> linkSuccess("file-$fileId-v3.mkv") }
+        val afresh = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
+        assertEquals("https://cdn.example/file-3-v3.mkv", afresh.url)
+        assertEquals(3, api.createCalls)
+    }
+
+    @Test
+    fun `refresh returns null for unknown links and for another account`() = runTest {
+        val settings = MutableStateFlow(torboxSettings("tb_token"))
+        val api = cachedApi(pmrFiles).apply { linkUrlFor = { fileId -> linkSuccess("file-$fileId-v1.mkv") } }
+        val resolver = directResolver(api, settings)
+        val original = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
+
+        assertNull(resolver.refreshPreparedTorboxUrl("https://cdn.example/never-prepared.mkv"))
+        assertEquals(1, api.createCalls)
+
+        settings.value = torboxSettings("other_token")
+        assertNull(resolver.refreshPreparedTorboxUrl(original.url))
+        assertEquals(1, api.createCalls)
+        assertEquals(1, api.requestCalls)
+        // The other account's entry is left alone, not cleared as a side effect.
+        assertTrue(resolver.hasPreparedTorboxDeliveryUrl(original.url))
+    }
+
+    @Test
+    fun `authentication failure while refreshing is an error and drops only the rejected link`() = runTest {
+        val settings = MutableStateFlow(torboxSettings("tb_token"))
+        val api = cachedApi(pmrFiles).apply { linkUrlFor = { fileId -> linkSuccess("file-$fileId-v1.mkv") } }
+        val resolver = directResolver(api, settings)
+        val original = resolver.resolve(episodeStream(1), season = 1, episode = 1) as DirectDebridResolveResult.Success
+        api.linkUrlFor = null
+        api.linkResponse = Response.error(
+            401,
+            """{"success":false,"error":"UNAUTHORIZED","detail":"Invalid API key"}""".toResponseBody(JSON)
+        )
+
+        val result = resolver.refreshPreparedTorboxUrl(original.url)
+
+        assertTrue(result is DirectDebridResolveResult.Error)
+        assertEquals(2, api.createCalls)
+        assertFalse(resolver.hasPreparedTorboxDeliveryUrl(original.url))
+    }
+
+    private fun torboxSettings(apiKey: String) = DebridSettings(enabled = true, torboxApiKey = apiKey)
+
+    private fun episodeStream(episode: Int): Stream {
+        val base = pmrStream()
+        // Clear the filename so file selection matches the episode, not the single file named on the stream.
+        return base.copy(clientResolve = base.clientResolve?.copy(filename = null, episode = episode))
+    }
+
+    private fun linkSuccess(name: String): Response<TorboxEnvelopeDto<String>> =
+        Response.success(TorboxEnvelopeDto(success = true, data = "https://cdn.example/$name"))
+
+    private fun directResolver(api: TorboxApi, settings: MutableStateFlow<DebridSettings>): DirectDebridResolver {
+        val dataStore = mockk<DebridSettingsDataStore>()
+        every { dataStore.settings } returns settings
+        return DirectDebridResolver(
+            dataStore = dataStore,
+            torboxResolver = TorboxDirectDebridResolver(
+                dataStore = dataStore,
+                api = api,
+                fileSelector = TorboxFileSelector()
+            ),
+            realDebridResolver = mockk(relaxed = true),
+            premiumizeResolver = mockk(relaxed = true),
+            localDebridService = mockk(relaxed = true)
+        )
+    }
+
+    private val JSON = "application/json".toMediaType()
     private val pmrFilename = "Sentenced to Be a Hero - S01E02 (BD 1080p x265 Opus) [Dual Audio] [PMR].mkv"
     private val pmrFiles = listOf(
         TorboxTorrentFileDto(
@@ -213,7 +367,7 @@ class TorboxDirectDebridResolverTest {
         private val torrentResponse: Response<TorboxEnvelopeDto<TorboxTorrentDataDto>> = Response.success(
             TorboxEnvelopeDto(success = true, data = TorboxTorrentDataDto(files = emptyList()))
         ),
-        private val linkResponse: Response<TorboxEnvelopeDto<String>> = Response.success(
+        var linkResponse: Response<TorboxEnvelopeDto<String>> = Response.success(
             TorboxEnvelopeDto(success = true, data = "")
         )
     ) : TorboxApi {
@@ -223,6 +377,8 @@ class TorboxDirectDebridResolverTest {
         var lastAddOnlyIfCached: Boolean? = null
         var lastAllowZip: Boolean? = null
         var lastFileId: Int? = null
+        /** When set, answers each link request by file id instead of [linkResponse]. */
+        var linkUrlFor: ((Int?) -> Response<TorboxEnvelopeDto<String>>)? = null
 
         override suspend fun getUser(authorization: String): Response<ResponseBody> {
             return Response.success("{}".toResponseBody("application/json".toMediaType()))
@@ -280,7 +436,7 @@ class TorboxDirectDebridResolverTest {
         ): Response<TorboxEnvelopeDto<String>> {
             requestCalls++
             lastFileId = fileId
-            return linkResponse
+            return linkUrlFor?.invoke(fileId) ?: linkResponse
         }
 
         override suspend fun listCloudTorrents(
