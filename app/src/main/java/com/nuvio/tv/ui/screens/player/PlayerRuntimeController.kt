@@ -521,6 +521,7 @@ class PlayerRuntimeController(
     internal var metaFetchJob: Job? = null
     internal var nextEpisodeVideo: Video? = null
     internal var nextEpisodePreloadJob: Job? = null
+    internal var nextEpisodePreparationTarget: NextEpisodePreparationPolicy.Target? = null
     internal var nextEpisodePreloadTriggered: Boolean = false
     internal var userPausedManually = false
 

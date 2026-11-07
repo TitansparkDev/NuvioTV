@@ -14,6 +14,24 @@ import org.junit.Test
 
 class PlayerNextEpisodeRulesTest {
 
+    @Test
+    fun `preparation policy excludes unavailable unsafe targets`() {
+        assertTrue(NextEpisodePreparationPolicy.shouldPrepare(true, true, false, false, false))
+        assertFalse(NextEpisodePreparationPolicy.shouldPrepare(true, false, false, false, false))
+        assertFalse(NextEpisodePreparationPolicy.shouldPrepare(true, true, true, false, false))
+        assertFalse(NextEpisodePreparationPolicy.shouldPrepare(true, true, false, true, false))
+        assertFalse(NextEpisodePreparationPolicy.shouldPrepare(true, true, false, false, true))
+    }
+
+    @Test
+    fun `preparation target identity includes profile source and continuation`() {
+        val a = NextEpisodePreparationPolicy.Target(1, "show", "ep2", 1, 2, "all", "group")
+        assertEquals(a, a.copy())
+        assertFalse(a == a.copy(profileId = 2))
+        assertFalse(a == a.copy(sourceConfiguration = "selected"))
+        assertFalse(a == a.copy(bingeGroup = "other"))
+    }
+
     private fun ep(season: Int?, episode: Int?, id: String = "s${season}e${episode}") =
         Video(
             id = id,

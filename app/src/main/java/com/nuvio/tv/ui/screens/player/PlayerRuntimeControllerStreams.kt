@@ -1951,14 +1951,19 @@ internal suspend fun PlayerRuntimeController.resolveDirectDebridStreamIfNeeded(
  * [playNextEpisode] call hits the cache and plays instantly.
  */
 internal fun PlayerRuntimeController.preloadNextEpisodeSources() {
-    if (nextEpisodePreloadTriggered) return
     val nextVideo = nextEpisodeVideo ?: return
     val type = contentType ?: return
     val nextInfo = _uiState.value.nextEpisode ?: return
     if (!nextInfo.hasAired) return
 
+    // Source-only warmup is owned by the same keyed preparation job as link selection.
+    val target = NextEpisodePreparationPolicy.Target(profileId, contentId.orEmpty(), nextVideo.id,
+        nextVideo.season, nextVideo.episode, "source-only", currentStreamBingeGroup)
+    if (nextEpisodePreparationTarget == target && (nextEpisodePreloadJob?.isActive == true || nextEpisodePrefetchJob?.isActive == true)) return
+    nextEpisodePreparationTarget = target
     nextEpisodePreloadTriggered = true
     nextEpisodePreloadJob?.cancel()
+    nextEpisodePrefetchJob?.cancel()
     nextEpisodePreloadJob = scope.launch {
         Log.d(PlayerRuntimeController.TAG, "Preloading sources for next episode: S${nextVideo.season}E${nextVideo.episode}")
         // The plugin-only modes continue a plugin series. After an addon stream they would
@@ -1980,6 +1985,7 @@ internal fun PlayerRuntimeController.cancelNextEpisodePreload() {
     nextEpisodePreloadJob?.cancel()
     nextEpisodePreloadJob = null
     nextEpisodePreloadTriggered = false
+    nextEpisodePreparationTarget = null
 }
 
 internal fun PlayerRuntimeController.playNextEpisode(
@@ -2007,6 +2013,7 @@ internal fun PlayerRuntimeController.playNextEpisode(
     }
 
     if (type.equals("cloud", ignoreCase = true)) {
+        if (prefetchOnly) return
         playNextCloudLibraryFile(nextVideo = nextVideo, userInitiated = userInitiated)
         return
     }
@@ -2045,6 +2052,7 @@ internal fun PlayerRuntimeController.playNextEpisode(
                         !playerSettings.streamAutoPlayNextEpisodeFallbackEnabled) &&
                     playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode
             if (playerSettings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL && !shouldAutoSelectInManualMode) {
+                if (prefetchOnly) return@launch
                 _uiState.update {
                     it.copy(
                         postPlayMode = null,
@@ -2355,6 +2363,18 @@ internal fun PlayerRuntimeController.prefetchNextEpisodeStream() {
     val nextVideo = nextEpisodeVideo ?: return
     if (prefetchedNextVideoId == nextVideo.id) return
     if (nextEpisodePrefetchJob?.isActive == true) return
+    val settings = currentPlayerSettingsForReport
+    if (!NextEpisodePreparationPolicy.shouldPrepare(
+            enabled = streamAutoPlayNextEpisodeEnabledSetting,
+            hasAired = _uiState.value.nextEpisode?.hasAired == true,
+            cloud = contentType.equals("cloud", true), partyLocked = isPartyControlLocked,
+            manualPickerRequired = settings.streamAutoPlayMode == StreamAutoPlayMode.MANUAL && !streamAutoPlayNextEpisodeEnabledSetting
+        )) return
+    val target = NextEpisodePreparationPolicy.Target(profileId, contentId.orEmpty(), nextVideo.id,
+        nextVideo.season, nextVideo.episode, settings.streamAutoPlayMode.name + settings.streamAutoPlaySource.name, currentStreamBingeGroup)
+    if (nextEpisodePreparationTarget == target && nextEpisodePreloadJob?.isActive == true) return
+    nextEpisodePreparationTarget = target
+    nextEpisodePreloadJob?.cancel()
     playNextEpisode(prefetchOnly = true)
 }
 
