@@ -54,6 +54,12 @@ def main():
     def adb(*command, timeout=60, check=True):
         return run([adb_bin, "-s", serial, *command], timeout=timeout, check=check)
 
+    def app_alive():
+        result = adb("shell", "pidof", PACKAGE, check=False)
+        if result.returncode and result.stderr.strip():
+            raise RuntimeError("ADB transport failed while checking the app process")
+        return bool(result.stdout.strip())
+
     # Refuse to attach to or terminate any device we did not create.
     devices = run([adb_bin, "devices"]).stdout
     if re.search(rf"^{re.escape(serial)}\s", devices, re.MULTILINE):
@@ -139,7 +145,7 @@ def main():
                     choices = ("Continue without account", "Advanced", "Classic View", "Classic",
                                "Profile 1", "Skip for now", "Skip setup", "Continue", "Done", "Skip")
                     for _ in range(20):
-                        if not adb("shell", "pidof", PACKAGE, check=False).stdout.strip():
+                        if not app_alive():
                             crash_evidence(stage, stamp)
                             raise StartupFailure(f"{stage} died during startup")
                         adb("shell", "uiautomator", "dump", "/sdcard/nuvio-release-ui.xml", check=False)
@@ -171,7 +177,7 @@ def main():
                     if not home:
                         raise StartupFailure(f"{stage} did not reach Home")
                     time.sleep(20)
-                    alive = bool(adb("shell", "pidof", PACKAGE, check=False).stdout.strip())
+                    alive = app_alive()
                     crashes = adb("logcat", "-b", "crash", "-d", "-T", stamp).stdout
                     # Keep raw UI/logcat private: account/connection codes must not enter CI logs.
                     if not alive or f"Process: {PACKAGE}," in crashes:
