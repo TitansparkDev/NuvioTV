@@ -27,7 +27,7 @@ android {
             create("bounded") {
                 r8 {
                     runInSeparateProcess = true
-                    jvmOptions += listOf("-Xms256m", "-Xmx2048m")
+                    jvmOptions += listOf("-Xms256m", "-Xmx6144m")
                 }
             }
             create("in-process") {

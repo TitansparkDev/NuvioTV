@@ -354,6 +354,7 @@ app/src/main/java/com/nuvio/tv/core/util/AppLocaleContext.kt
 app/src/main/java/com/nuvio/tv/core/util/AppLogo.kt
 app/src/main/java/com/nuvio/tv/core/util/EpisodeReleaseDateParser.kt
 app/src/main/java/com/nuvio/tv/core/util/EpochDayMath.kt
+app/src/main/java/com/nuvio/tv/core/util/JobSchedulerExt.kt
 app/src/main/java/com/nuvio/tv/core/util/ReleaseInfoUtils.kt
 app/src/main/java/com/nuvio/tv/core/util/RuntimeParser.kt
 app/src/main/java/com/nuvio/tv/core/util/ThrowableUtils.kt
