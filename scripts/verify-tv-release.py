@@ -10,10 +10,12 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import time
 import xml.etree.ElementTree as ET
+import zipfile
 
 PACKAGE = "com.nuvio.tv.shuffle"
 IMAGE = "system-images;android-34;google-tv;x86"
@@ -77,10 +79,34 @@ def main():
                                    ("secure", "tv_user_setup_complete")):
                 adb("shell", "settings", "put", namespace, key, "1")
             adb("shell", "wm", "dismiss-keyguard")
+            sdk_int = int(adb("shell", "getprop", "ro.build.version.sdk").stdout.strip())
 
             def verify(apk, stage):
                 print(f"Installing {stage}: {apk.name}", flush=True)
-                adb("install", "-r", str(apk.resolve()), timeout=180)
+                # Match the app updater's PackageInstaller session, including its
+                # embedded ART profile. Plain adb install skips that install path.
+                staged = fixture / stage
+                staged.mkdir()
+                shutil.copyfile(apk, staged / "base.apk")
+                with zipfile.ZipFile(apk) as archive:
+                    index_name = "assets/updater_dm/index.properties"
+                    if index_name in archive.namelist():
+                        index = {}
+                        for line in archive.read(index_name).decode().splitlines():
+                            match = re.fullmatch(r"(\d+)\s*=\s*(.+)", line.strip())
+                            if match:
+                                index[int(match[1])] = match[2]
+                        name = index.get(sdk_int)
+                        listed = [level for level in index if level != 2147483647]
+                        if name is None and listed and sdk_int > max(listed):
+                            name = index.get(2147483647)
+                        if name:
+                            (staged / "base.dm").write_bytes(archive.read("assets/updater_dm/" + name))
+                if (staged / "base.dm").exists():
+                    adb("install-multiple", "-r", str(staged / "base.apk"),
+                        str(staged / "base.dm"), timeout=180)
+                else:
+                    adb("install", "-r", str(staged / "base.apk"), timeout=180)
                 for launch in range(2):
                     adb("shell", "am", "force-stop", PACKAGE)
                     stamp = adb("shell", "date", "+%m-%d %H:%M:%S.000").stdout.strip()
