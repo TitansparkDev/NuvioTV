@@ -52,6 +52,8 @@ def main():
                               check=check, env=env, **kwargs)
 
     def adb(*command, timeout=60, check=True):
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(f"Google TV emulator exited with status {process.returncode}")
         return run([adb_bin, "-s", serial, *command], timeout=timeout, check=check)
 
     def app_alive():
@@ -73,7 +75,8 @@ def main():
             process = subprocess.Popen(
                 [emulator_bin, "-avd", "release-gate", "-port", str(args.port),
                  "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim",
-                 "-gpu", "swiftshader_indirect", "-memory", "1536", "-cores", "2"],
+                 "-gpu", "swiftshader", "-feature", "-Vulkan",
+                 "-memory", "1536", "-cores", "2"],
                 env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240
             while time.monotonic() < deadline:
@@ -91,8 +94,8 @@ def main():
             adb("shell", "wm", "dismiss-keyguard")
             sdk_int = int(adb("shell", "getprop", "ro.build.version.sdk").stdout.strip())
 
-            def crash_evidence(stage, stamp):
-                logs = adb("logcat", "-b", "crash", "-d", "-T", stamp, check=False).stdout
+            def crash_evidence(stage):
+                logs = adb("logcat", "-b", "crash", "-d", check=False).stdout
                 private_log = fixture / f"{stage}-crash.log"
                 private_log.touch(mode=0o600)
                 private_log.write_text(logs)
@@ -132,7 +135,7 @@ def main():
                     adb("install", "-r", str(staged / "base.apk"), timeout=180)
                 for launch in range(2):
                     adb("shell", "am", "force-stop", PACKAGE)
-                    stamp = adb("shell", "date", "+%m-%d %H:%M:%S.000").stdout.strip()
+                    adb("logcat", "-b", "crash", "-c")
                     resolved = adb("shell", "cmd", "package", "resolve-activity", "--brief", PACKAGE).stdout.strip()
                     component = resolved.splitlines()[-1]
                     if not component.startswith(PACKAGE + "/"):
@@ -146,7 +149,7 @@ def main():
                                "Profile 1", "Skip for now", "Skip setup", "Continue", "Done", "Skip")
                     for _ in range(20):
                         if not app_alive():
-                            crash_evidence(stage, stamp)
+                            crash_evidence(stage)
                             raise StartupFailure(f"{stage} died during startup")
                         adb("shell", "uiautomator", "dump", "/sdcard/nuvio-release-ui.xml", check=False)
                         raw = adb("shell", "cat", "/sdcard/nuvio-release-ui.xml", check=False).stdout
@@ -178,10 +181,10 @@ def main():
                         raise StartupFailure(f"{stage} did not reach Home")
                     time.sleep(20)
                     alive = app_alive()
-                    crashes = adb("logcat", "-b", "crash", "-d", "-T", stamp).stdout
+                    crashes = adb("logcat", "-b", "crash", "-d").stdout
                     # Keep raw UI/logcat private: account/connection codes must not enter CI logs.
                     if not alive or f"Process: {PACKAGE}," in crashes:
-                        crash_evidence(stage, stamp)
+                        crash_evidence(stage)
                         raise StartupFailure(f"{stage} failed the post-Home survival check")
                     results.append({"stage": stage, "cold_launch": launch + 1, "home": True,
                                     "survived": True, "sha256": hashlib.sha256(apk.read_bytes()).hexdigest()})
