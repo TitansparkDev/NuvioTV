@@ -32,6 +32,7 @@ def main():
     parser.add_argument("--work-dir", required=True, type=Path)
     parser.add_argument("--sdk", type=Path, default=os.environ.get("ANDROID_HOME"))
     parser.add_argument("--port", type=int, default=5562)
+    parser.add_argument("--avd", help="Reuse a pre-provisioned, marked Nuvio test fixture")
     args = parser.parse_args()
     if not args.sdk:
         parser.error("--sdk or ANDROID_HOME is required")
@@ -40,8 +41,13 @@ def main():
             parser.error(f"APK does not exist: {apk}")
     args.work_dir.mkdir(parents=True, exist_ok=True)
     fixture = Path(tempfile.mkdtemp(prefix="tv-fixture-", dir=args.work_dir))
-    avd_home = fixture / "avds"
-    avd_home.mkdir()
+    if args.avd:
+        avd_home = Path.home() / ".android/avd"
+        if not (avd_home / f"{args.avd}.avd/.nuvio-test-fixture").is_file():
+            parser.error("Refusing an existing AVD without the Nuvio test-fixture ownership marker")
+    else:
+        avd_home = fixture / "avds"
+        avd_home.mkdir()
     env = {**os.environ, "ANDROID_AVD_HOME": str(avd_home)}
     adb_bin = str(args.sdk / "platform-tools/adb")
     emulator_bin = str(args.sdk / "emulator/emulator")
@@ -54,7 +60,12 @@ def main():
     def adb(*command, timeout=60, check=True):
         if process is not None and process.poll() is not None:
             raise RuntimeError(f"Google TV emulator exited with status {process.returncode}")
-        return run([adb_bin, "-s", serial, *command], timeout=timeout, check=check)
+        try:
+            return run([adb_bin, "-s", serial, *command], timeout=timeout, check=check)
+        except subprocess.TimeoutExpired:
+            if process is not None and process.poll() is not None:
+                raise RuntimeError(f"Google TV emulator exited with status {process.returncode}") from None
+            raise
 
     def app_alive():
         result = adb("shell", "pidof", PACKAGE, check=False)
@@ -66,14 +77,15 @@ def main():
     devices = run([adb_bin, "devices"]).stdout
     if re.search(rf"^{re.escape(serial)}\s", devices, re.MULTILINE):
         raise RuntimeError(f"Port {args.port} already belongs to another emulator")
-    run([str(args.sdk / "cmdline-tools/latest/bin/avdmanager"), "create", "avd",
-         "-n", "release-gate", "-k", IMAGE, "-d", "tv_1080p"], input="no\n", timeout=90)
+    if not args.avd:
+        run([str(args.sdk / "cmdline-tools/latest/bin/avdmanager"), "create", "avd",
+             "-n", "release-gate", "-k", IMAGE, "-d", "tv_1080p"], input="no\n", timeout=90)
     results = []
     process = None
     try:
         with (fixture / "emulator.log").open("w") as log:
             process = subprocess.Popen(
-                [emulator_bin, "-avd", "release-gate", "-port", str(args.port),
+                [emulator_bin, "-avd", args.avd or "release-gate", "-port", str(args.port),
                  "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim",
                  "-gpu", "swiftshader", "-feature", "-Vulkan",
                  "-memory", "1536", "-cores", "2"],
@@ -129,10 +141,14 @@ def main():
                         if name:
                             (staged / "base.dm").write_bytes(archive.read("assets/updater_dm/" + name))
                 if (staged / "base.dm").exists():
-                    adb("install-multiple", "-r", str(staged / "base.apk"),
-                        str(staged / "base.dm"), timeout=180)
+                    installed = adb("install-multiple", "-r", str(staged / "base.apk"),
+                                    str(staged / "base.dm"), timeout=240, check=False)
                 else:
-                    adb("install", "-r", str(staged / "base.apk"), timeout=180)
+                    installed = adb("install", "-r", str(staged / "base.apk"), timeout=240, check=False)
+                if installed.returncode:
+                    if stage == "previous" and "INSTALL_FAILED_VERSION_DOWNGRADE" in installed.stdout + installed.stderr:
+                        raise StartupFailure("Existing synthetic fixture already has a newer build; preserving its data")
+                    raise RuntimeError(f"{stage} installation failed (exit {installed.returncode})")
                 for launch in range(2):
                     adb("shell", "am", "force-stop", PACKAGE)
                     adb("logcat", "-b", "crash", "-c")

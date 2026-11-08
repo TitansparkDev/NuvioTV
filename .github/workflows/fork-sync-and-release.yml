@@ -274,6 +274,7 @@ jobs:
         run: |
           "${HOME}/.local/bin/agentq" run --resource android,heavy_build --timeout 900 --wait 1800 -- \
             python3 scripts/verify-tv-release.py \
+              --avd nuvio_crash_tv34_20261107 --port 5560 \
               --apk app/build/outputs/apk/full/release/app-full-x86-release.apk \
               --previous-apk "${RUNNER_TEMP}/nuvio-tv-gate/previous/app-full-x86-release.apk" \
               --work-dir "${RUNNER_TEMP}/nuvio-tv-gate/run-${GITHUB_RUN_ID}"
