@@ -21,6 +21,10 @@ PACKAGE = "com.nuvio.tv.shuffle"
 IMAGE = "system-images;android-34;google-tv;x86"
 
 
+class StartupFailure(RuntimeError):
+    pass
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apk", required=True, type=Path)
@@ -81,6 +85,19 @@ def main():
             adb("shell", "wm", "dismiss-keyguard")
             sdk_int = int(adb("shell", "getprop", "ro.build.version.sdk").stdout.strip())
 
+            def crash_evidence(stage, stamp):
+                logs = adb("logcat", "-b", "crash", "-d", "-T", stamp, check=False).stdout
+                private_log = fixture / f"{stage}-crash.log"
+                private_log.touch(mode=0o600)
+                private_log.write_text(logs)
+                # Show types and stack locations, never exception messages or raw UI.
+                for line in logs.splitlines():
+                    exception = re.search(r"(?:[a-zA-Z_]\w*\.)+[A-Z]\w*(?:Exception|Error)\b", line)
+                    frame = re.search(r"\bat [\w.$]+\([^)]*\)", line)
+                    if exception or frame:
+                        print((exception or frame).group(0), flush=True)
+                print(f"Private diagnostic log: {private_log}", flush=True)
+
             def verify(apk, stage):
                 print(f"Installing {stage}: {apk.name}", flush=True)
                 # Match the app updater's PackageInstaller session, including its
@@ -116,14 +133,15 @@ def main():
                         raise RuntimeError("Release launcher could not be resolved")
                     started = adb("shell", "am", "start", "-W", "-n", component).stdout
                     if "Status: ok" not in started:
-                        raise RuntimeError("Release launcher failed to start")
+                        raise StartupFailure("Release launcher failed to start")
                     time.sleep(5)
                     home = False
                     choices = ("Continue without account", "Advanced", "Classic View", "Classic",
                                "Profile 1", "Skip for now", "Skip setup", "Continue", "Done", "Skip")
                     for _ in range(20):
                         if not adb("shell", "pidof", PACKAGE, check=False).stdout.strip():
-                            raise RuntimeError(f"{stage} died during startup")
+                            crash_evidence(stage, stamp)
+                            raise StartupFailure(f"{stage} died during startup")
                         adb("shell", "uiautomator", "dump", "/sdcard/nuvio-release-ui.xml", check=False)
                         raw = adb("shell", "cat", "/sdcard/nuvio-release-ui.xml", check=False).stdout
                         try:
@@ -151,19 +169,26 @@ def main():
                             adb("shell", "input", "dpad", "keyevent", "KEYCODE_DPAD_LEFT")
                         time.sleep(3)
                     if not home:
-                        raise RuntimeError(f"{stage} did not reach Home")
+                        raise StartupFailure(f"{stage} did not reach Home")
                     time.sleep(20)
                     alive = bool(adb("shell", "pidof", PACKAGE, check=False).stdout.strip())
                     crashes = adb("logcat", "-b", "crash", "-d", "-T", stamp).stdout
                     # Keep raw UI/logcat private: account/connection codes must not enter CI logs.
                     if not alive or f"Process: {PACKAGE}," in crashes:
-                        raise RuntimeError(f"{stage} failed the post-Home survival check")
+                        crash_evidence(stage, stamp)
+                        raise StartupFailure(f"{stage} failed the post-Home survival check")
                     results.append({"stage": stage, "cold_launch": launch + 1, "home": True,
                                     "survived": True, "sha256": hashlib.sha256(apk.read_bytes()).hexdigest()})
                     print(f"PASS: {stage} cold launch {launch + 1}, Home reached and stable", flush=True)
 
             if args.previous_apk:
-                verify(args.previous_apk, "previous")
+                try:
+                    verify(args.previous_apk, "previous")
+                except StartupFailure as error:
+                    # A broken released version is the reason for a hotfix. Its
+                    # failure must not prevent testing the repair over its data.
+                    results.append({"stage": "previous", "survived": False, "error": str(error)})
+                    print(f"Previous release failed startup: {error}; testing the replacement over its data", flush=True)
             verify(args.apk, "candidate")
     finally:
         (args.work_dir / "tv-startup-results.json").write_text(json.dumps(
