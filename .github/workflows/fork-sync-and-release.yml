@@ -19,7 +19,7 @@ on:
         type: boolean
         default: false
       low_memory:
-        description: Use signed production packaging without R8 (larger APKs)
+        description: Run the release optimizer in a separate memory-bounded process
         type: boolean
         default: true
 
@@ -243,7 +243,7 @@ jobs:
 
       - name: Build release APKs
         if: steps.decide.outputs.proceed == 'true'
-        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 2400 --wait 1800 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} -PforkLowMemoryRelease=${{ github.event_name == ''schedule'' || inputs.low_memory }} --no-daemon --max-workers=2 --build-cache --stacktrace'
+        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 2400 --wait 1800 -- heavy-build-slot ./gradlew :app:assembleFullRelease -PFORK_BUILD=${{ steps.version.outputs.fork_build }} -Pandroid.settings.executionProfile=${{ (github.event_name == ''schedule'' || inputs.low_memory) && ''bounded'' || ''in-process'' }} --no-daemon --max-workers=2 --build-cache --stacktrace'
 
       # Keep the APKs even if publishing fails. This build is the better part of an
       # hour, and losing it to a bad token or a rate limit at the last step is a waste
@@ -255,6 +255,36 @@ jobs:
           name: nuviotv-fork-${{ steps.version.outputs.tag }}-apks
           path: app/build/outputs/apk/full/release/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+      - name: Prepare isolated Google TV launch test
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/nuvio-tv-gate/previous"
+          gh release download --repo "${GITHUB_REPOSITORY}" \
+            --pattern app-full-x86-release.apk --clobber \
+            --dir "${RUNNER_TEMP}/nuvio-tv-gate/previous"
+          if [[ ! -f "${ANDROID_HOME}/system-images/android-34/google-tv/x86/package.xml" ]]; then
+            "${HOME}/.local/bin/agentq" run --resource package_install --timeout 900 --wait 120 -- \
+              "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-34;google-tv;x86'
+          fi
+
+      - name: Verify release opens Home on Google TV before publishing
+        if: steps.decide.outputs.proceed == 'true'
+        run: |
+          "${HOME}/.local/bin/agentq" run --resource android,heavy_build --timeout 900 --wait 1800 -- \
+            python3 scripts/verify-tv-release.py \
+              --apk app/build/outputs/apk/full/release/app-full-x86-release.apk \
+              --previous-apk "${RUNNER_TEMP}/nuvio-tv-gate/previous/app-full-x86-release.apk" \
+              --work-dir "${RUNNER_TEMP}/nuvio-tv-gate/run-${GITHUB_RUN_ID}"
+
+      - name: Keep Google TV verification results
+        if: always() && steps.decide.outputs.proceed == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: nuviotv-tv-startup-${{ github.run_id }}
+          path: ${{ runner.temp }}/nuvio-tv-gate/run-${{ github.run_id }}/tv-startup-results.json
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Push the synced branch
@@ -279,8 +309,10 @@ jobs:
           {
             echo "Automatic build of NuvioTV ${BASE_VERSION} with the fork's shuffle button and Dialogue Leveler."
             echo
+            echo "Google TV launch verification passed, including an in-place update with test app data retained."
+            echo
             if [[ "${{ github.event_name == 'schedule' || inputs.low_memory }}" == "true" ]]; then
-              echo "Signed production build with code and resource shrinking disabled to fit the build machine's memory limit. APKs are larger than optimized builds."
+              echo "Optimized signed production build, using a separate memory-bounded optimizer process."
               echo
             fi
             echo "Upstream: NuvioMedia/NuvioTV at [\`${UPSTREAM_SHA:0:7}\`](https://github.com/NuvioMedia/NuvioTV/commit/${UPSTREAM_SHA}) - ${upstream_subject}"

@@ -1960,6 +1960,15 @@ internal fun PlayerRuntimeController.preloadNextEpisodeSources() {
     // Source-only warmup is owned by the same keyed preparation job as link selection.
     val target = NextEpisodePreparationPolicy.Target(profileId, contentId.orEmpty(), nextVideo.id,
         nextVideo.season, nextVideo.episode, "source-only", currentStreamBingeGroup)
+    if (NextEpisodePreparationPolicy.shouldReusePlayablePreparation(
+            current = nextEpisodePreparationTarget,
+            requested = target,
+            resolving = nextEpisodePrefetchJob?.isActive == true,
+            preparedVideoId = prefetchedNextVideoId,
+        )) {
+        nextEpisodePreloadTriggered = true
+        return
+    }
     if (nextEpisodePreparationTarget == target && (nextEpisodePreloadJob?.isActive == true || nextEpisodePrefetchJob?.isActive == true)) return
     nextEpisodePreparationTarget = target
     nextEpisodePreloadTriggered = true

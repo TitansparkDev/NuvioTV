@@ -44,6 +44,31 @@ class PlayerNextEpisodeRulesTest {
         )
 
     @Test
+    fun `source warmup preserves resolving and banked next episode links`() {
+        // November 2026 regression: source-only warmup used a different configuration
+        // key and cancelled the more advanced next-episode preparation.
+        val playable = NextEpisodePreparationPolicy.Target(1, "show", "ep2", 1, 2, "FIRST_STREAMALL_SOURCES", "group")
+        val warmup = playable.copy(sourceConfiguration = "source-only")
+        assertTrue(NextEpisodePreparationPolicy.shouldReusePlayablePreparation(playable, warmup, true, null))
+        assertTrue(NextEpisodePreparationPolicy.shouldReusePlayablePreparation(playable, warmup, false, "ep2"))
+        assertFalse(NextEpisodePreparationPolicy.shouldReusePlayablePreparation(playable, warmup, false, null))
+    }
+
+    @Test
+    fun `playable preparation cannot be reused across profiles episodes or continuation groups`() {
+        val playable = NextEpisodePreparationPolicy.Target(1, "show", "ep2", 1, 2, "FIRST_STREAMALL_SOURCES", "group")
+        val warmup = playable.copy(sourceConfiguration = "source-only")
+        for (different in listOf(
+            warmup.copy(profileId = 2),
+            warmup.copy(contentId = "other-show"),
+            warmup.copy(videoId = "ep3", episode = 3),
+            warmup.copy(bingeGroup = "other-group"),
+        )) {
+            assertFalse(NextEpisodePreparationPolicy.shouldReusePlayablePreparation(playable, different, true, null))
+        }
+    }
+
+    @Test
     fun `advances to next episode in same season`() {
         val videos = listOf(ep(1, 1), ep(1, 2), ep(1, 3))
         val next = PlayerNextEpisodeRules.resolveNextEpisode(videos, currentSeason = 1, currentEpisode = 2)

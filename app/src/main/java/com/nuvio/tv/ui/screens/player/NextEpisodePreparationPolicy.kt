@@ -19,4 +19,15 @@ internal object NextEpisodePreparationPolicy {
         partyLocked: Boolean,
         manualPickerRequired: Boolean,
     ): Boolean = enabled && hasAired && !cloud && !partyLocked && !manualPickerRequired
+
+    /** A source-only warmup must not downgrade a resolving or banked playable link. */
+    fun shouldReusePlayablePreparation(
+        current: Target?,
+        requested: Target,
+        resolving: Boolean,
+        preparedVideoId: String?,
+    ): Boolean {
+        if (!resolving && preparedVideoId != requested.videoId) return false
+        return current?.copy(sourceConfiguration = requested.sourceConfiguration) == requested
+    }
 }

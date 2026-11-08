@@ -441,7 +441,9 @@ class StreamRepositoryImpl @Inject constructor(
                                 if (activeChecks < 2) {
                                     scheduleAvailabilityCheck(checkingResult)
                                 } else {
-                                    pendingChecks[checkingResult.addonName] = checkingResult
+                                    pendingChecks[checkingResult.addonName] = StreamResultMerger.merge(
+                                        pendingChecks[checkingResult.addonName], checkingResult
+                                    )
                                 }
                             }
                         }
@@ -571,9 +573,7 @@ class StreamRepositoryImpl @Inject constructor(
         val existingIndex = accumulatedResults.indexOfFirst { it.addonName == result.addonName }
         if (existingIndex >= 0) {
             val existing = accumulatedResults[existingIndex]
-            val merged = existing.copy(
-                streams = mergeStreams(existing.streams, result.streams)
-            )
+            val merged = StreamResultMerger.merge(existing, result)
             accumulatedResults[existingIndex] = presentStreams(merged, debridSettings)
         } else {
             accumulatedResults.add(presentStreams(result, debridSettings))
@@ -586,13 +586,6 @@ class StreamRepositoryImpl @Inject constructor(
             settings = debridSettings,
             includeBadgeMatches = false
         ).firstOrNull() ?: result
-    }
-
-    private fun mergeStreams(existing: List<Stream>, incoming: List<Stream>): List<Stream> {
-        val streamsByKey = LinkedHashMap<String, Stream>()
-        existing.forEach { stream -> streamsByKey[stream.dedupKey()] = stream }
-        incoming.forEach { stream -> streamsByKey[stream.dedupKey()] = stream }
-        return streamsByKey.values.toList()
     }
 
     /**
@@ -701,21 +694,6 @@ class StreamRepositoryImpl @Inject constructor(
             qualityValue = parseQualityValue(quality),
             subtitles = subtitles
         )
-    }
-
-    private fun Stream.dedupKey(): String {
-        val base = infoHash?.lowercase()?.let { hash -> "$hash:${fileIdx ?: ""}" }
-            ?: clientResolve?.infoHash?.lowercase()?.let { hash -> "$hash:${clientResolve.fileIdx}" }
-            ?: url
-            ?: externalUrl
-            ?: ytId
-            ?: serverTarget?.key()
-            ?: "${addonName}:${name}:${title}"
-        val nameSuffix = if (base == url) {
-            val discriminator = name?.takeIf { it.isNotBlank() }
-            if (discriminator != null) "|$discriminator" else ""
-        } else ""
-        return "$base$nameSuffix"
     }
 
     /**

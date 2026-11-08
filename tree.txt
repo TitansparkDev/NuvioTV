@@ -524,6 +524,7 @@ app/src/main/java/com/nuvio/tv/data/repository/SimklIdResolver.kt
 app/src/main/java/com/nuvio/tv/data/repository/SkipIntroRepository.kt
 app/src/main/java/com/nuvio/tv/data/repository/SponsorsRepository.kt
 app/src/main/java/com/nuvio/tv/data/repository/StreamRepositoryImpl.kt
+app/src/main/java/com/nuvio/tv/data/repository/StreamResultMerger.kt
 app/src/main/java/com/nuvio/tv/data/repository/StreamSearchSessionCache.kt
 app/src/main/java/com/nuvio/tv/data/repository/SubtitleRepositoryImpl.kt
 app/src/main/java/com/nuvio/tv/data/repository/SupportersRepository.kt
@@ -1470,6 +1471,7 @@ app/src/test/java/com/nuvio/tv/data/repository/MetaRepositoryPreferredAddonTypeT
 app/src/test/java/com/nuvio/tv/data/repository/RemoteProgressWriteDeduplicatorTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/SponsorsRepositoryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/StreamRepositoryPluginIsolationTest.kt
+app/src/test/java/com/nuvio/tv/data/repository/StreamResultMergerTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/StreamSearchSessionCacheTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/SupportersRepositoryTest.kt
 app/src/test/java/com/nuvio/tv/data/repository/TrackingPlaybackScenariosTest.kt
@@ -1717,5 +1719,6 @@ scripts/release_notes/vocabulary.py
 scripts/tests/__init__.py
 scripts/tests/test_release_channels.py
 scripts/tests/test_release_notes.py
+scripts/verify-tv-release.py
 settings.gradle.kts
 tree.txt
