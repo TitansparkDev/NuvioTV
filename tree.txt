@@ -821,6 +821,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/detail/CompanyLogosSection.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DateFormat.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailEpisodeShuffle.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailRowWindowAnchor.kt
+app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailsPrefetchTarget.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeOptionsOverlay.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeRatingsSection.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeShuffleDialog.kt

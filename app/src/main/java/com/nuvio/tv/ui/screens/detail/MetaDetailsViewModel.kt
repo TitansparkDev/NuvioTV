@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.nuvio.tv.core.player.StreamAutoPlayPolicy
 import com.nuvio.tv.core.profile.ProfileManager
+import com.nuvio.tv.core.streams.PlaybackPrefetchCoordinator
+import com.nuvio.tv.core.streams.PlaybackAvailability
+import com.nuvio.tv.core.streams.PrefetchTarget
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.poster.withCustomPosterUrls
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
@@ -118,6 +121,7 @@ class MetaDetailsViewModel @Inject constructor(
     private val episodeShuffle: com.nuvio.tv.domain.model.EpisodeShuffle,
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val profileManager: ProfileManager,
+    private val playbackPrefetchCoordinator: PlaybackPrefetchCoordinator,
     private val metaDetailsSessionState: MetaDetailsSessionState,
     private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder,
     val posterOptions: com.nuvio.tv.ui.components.posteroptions.PosterOptionsController,
@@ -158,6 +162,7 @@ class MetaDetailsViewModel @Inject constructor(
     private var commentsJob: Job? = null
     private var commentsLoadMoreJob: Job? = null
     private var pendingDefaultLibraryToggle: LibraryEntryInput? = null
+    private var lastDetailsPrefetchTarget: PrefetchTarget? = null
 
     private var trailerDelayMs = 7000L
     private var trailerAutoplayEnabled = false
@@ -340,6 +345,26 @@ class MetaDetailsViewModel @Inject constructor(
                 )
             } else {
                 state.copy(nextToWatch = nextToWatch)
+            }
+        }
+        requestDetailsPrefetch()
+    }
+
+    private fun requestDetailsPrefetch() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val meta = state.meta ?: return@launch
+            val settings = playerSettingsDataStore.playerSettings.first()
+            // Availability is checked by the details UI before hero playback. The coordinator
+            // performs the same speculative lookup only when an enabled addon can serve it.
+            val target = detailsPrefetchTarget(
+                profileManager.activeProfileId.value, meta, state.nextToWatch,
+                state.episodesForSeason, settings, PlaybackAvailability()
+            )
+            if (target != lastDetailsPrefetchTarget) {
+                lastDetailsPrefetchTarget?.let(playbackPrefetchCoordinator::cancelPending)
+                lastDetailsPrefetchTarget = target
+                target?.let(playbackPrefetchCoordinator::request)
             }
         }
     }
@@ -1033,6 +1058,7 @@ class MetaDetailsViewModel @Inject constructor(
                 shouldShowCommentsSection = traktCommentsEnabled && traktAuthenticated && supportsComments(meta)
             )
         }
+        requestDetailsPrefetch()
 
         // Calculate next to watch after meta is loaded
         reevaluateSeriesWatchedBadge()
@@ -1761,6 +1787,7 @@ class MetaDetailsViewModel @Inject constructor(
                 episodesForSeason = episodes
             )
         }
+        requestDetailsPrefetch()
     }
 
     private fun getEpisodesForSeason(meta: Meta, season: Int): List<Video> {
@@ -3197,6 +3224,7 @@ class MetaDetailsViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        lastDetailsPrefetchTarget?.let(playbackPrefetchCoordinator::cancelPending)
         idleTimerJob?.cancel()
         trailerFetchJob?.cancel()
         nextToWatchJob?.cancel()
