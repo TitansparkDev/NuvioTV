@@ -305,6 +305,8 @@ app/src/main/java/com/nuvio/tv/core/server/StreamBadgeWebPage.kt
 app/src/main/java/com/nuvio/tv/core/server/SubtitleFontUploadServer.kt
 app/src/main/java/com/nuvio/tv/core/server/SubtitleFontWebPage.kt
 app/src/main/java/com/nuvio/tv/core/streams/PlaybackAvailability.kt
+app/src/main/java/com/nuvio/tv/core/streams/PlaybackLinkWarmup.kt
+app/src/main/java/com/nuvio/tv/core/streams/PlaybackWarmupStore.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgePresentation.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeRules.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeSettings.kt
@@ -1489,6 +1491,7 @@ app/src/test/java/com/nuvio/tv/core/server/AddonConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/server/DebridFormatterConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/server/StreamBadgeConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackAvailabilityTest.kt
+app/src/test/java/com/nuvio/tv/core/streams/PlaybackLinkWarmupTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/YouTubeStreamResolverTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSettingsSyncServiceTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSyncSupportTest.kt
