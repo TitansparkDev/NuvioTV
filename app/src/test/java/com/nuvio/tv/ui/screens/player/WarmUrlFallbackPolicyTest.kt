@@ -9,7 +9,7 @@ import java.net.SocketTimeoutException
 class WarmUrlFallbackPolicyTest {
     @Test fun `eligible status errors fall back only before first frame`() {
         for (status in listOf(401, 403, 404, 410)) {
-            val cause = HttpDataSource.InvalidResponseCodeException(status, "", emptyMap(), null, null)
+            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), null, ByteArray(0))
             val error = PlaybackException("http", cause, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
             assertEquals(true, WarmUrlFallbackPolicy.shouldFallBack(error, true, false, false))
             assertEquals(false, WarmUrlFallbackPolicy.shouldFallBack(error, true, true, false))
