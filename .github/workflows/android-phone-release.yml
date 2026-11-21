@@ -1,0 +1,77 @@
+name: Build Android phone APKs (NuvioDesktop fork)
+
+# Builds the phone app from TitansparkDev/NuvioDesktop (NuvioMobile upstream plus this fork's
+# Dialogue Leveler) with the same app keys and signing key as the TV release, and keeps the
+# signed APKs as a workflow artifact. The release itself is published on TitansparkDev/NuvioDesktop
+# under an `android-v<version>` tag, which is what the phone app's updater reads.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: TitansparkDev/NuvioDesktop branch or commit to build
+        required: true
+        default: android-phone
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-phone-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, X64, ajay-trusted]
+    timeout-minutes: 120
+    steps:
+      - name: Check out the phone app
+        uses: actions/checkout@v6
+        with:
+          repository: TitansparkDev/NuvioDesktop
+          ref: ${{ inputs.ref }}
+          path: phone
+          fetch-depth: 1
+
+      - name: Write build configuration
+        working-directory: phone
+        env:
+          LOCAL_PROPERTIES_BASE64: ${{ secrets.LOCAL_PROPERTIES_BASE64 }}
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          for name in LOCAL_PROPERTIES_BASE64 RELEASE_KEYSTORE_BASE64 RELEASE_KEY_ALIAS \
+                      RELEASE_KEY_PASSWORD RELEASE_STORE_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing repository secret: ${name}" >&2
+              exit 1
+            fi
+          done
+          keystore_path="${RUNNER_TEMP}/phone-release.jks"
+          printf '%s' "${RELEASE_KEYSTORE_BASE64}" | base64 --decode > "${keystore_path}"
+          printf '%s' "${LOCAL_PROPERTIES_BASE64}" | base64 --decode > local.properties
+          sed -i -E '/^[[:space:]]*sdk\.dir[[:space:]]*=/d' local.properties
+          {
+            echo
+            echo "NUVIO_RELEASE_STORE_FILE=${keystore_path}"
+            echo "NUVIO_RELEASE_KEY_ALIAS=${RELEASE_KEY_ALIAS}"
+            echo "NUVIO_RELEASE_KEY_PASSWORD=${RELEASE_KEY_PASSWORD}"
+            echo "NUVIO_RELEASE_STORE_PASSWORD=${RELEASE_STORE_PASSWORD}"
+          } >> local.properties
+
+      - name: Accept SDK licences
+        run: yes | "${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+
+      - name: Build signed release APKs
+        working-directory: phone
+        run: '"${HOME}/.local/bin/agentq" run --resource heavy_build --timeout 3600 --wait 1800 -- heavy-build-slot ./gradlew :androidApp:assembleFullRelease --no-daemon --max-workers=2 --stacktrace'
+
+      - name: Keep the APKs
+        uses: actions/upload-artifact@v6
+        with:
+          name: nuvio-phone-apks
+          path: phone/androidApp/build/outputs/apk/full/release/*.apk
+          if-no-files-found: error
+          retention-days: 14

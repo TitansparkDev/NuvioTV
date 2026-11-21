@@ -121,10 +121,6 @@ fun truthy(value: String?): Boolean {
 val buildingAppBundle = gradle.startParameter.taskNames.any { it.contains("bundle", ignoreCase = true) }
 val useDebugReleaseSigning = env("CI_USE_DEBUG_SIGNING").equals("true", ignoreCase = true) ||
     providers.gradleProperty("ciUseDebugSigning").orNull.equals("true", ignoreCase = true)
-// Optional production packaging for memory-constrained builders. Signing, service
-// configuration and non-debuggable behavior stay identical; APKs are larger.
-val forkLowMemoryRelease = providers.gradleProperty("forkLowMemoryRelease")
-    .orNull.equals("true", ignoreCase = true)
 val useLocalFfmpegDecoder = truthy(
     providers.gradleProperty("useLocalFfmpegDecoder").orNull
         ?: env("USE_LOCAL_FFMPEG_DECODER")
@@ -283,8 +279,8 @@ android {
             buildConfigField("String", "SPONSOR_NAMES", buildConfigString(sponsorNames))
         }
         release {
-            isMinifyEnabled = !forkLowMemoryRelease
-            isShrinkResources = !forkLowMemoryRelease
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

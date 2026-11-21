@@ -25,6 +25,8 @@ object SentryInitializer {
     @Volatile private var active = false
 
     fun start(application: Application, settings: SentrySettingsDataStore) {
+        // Fork builds disable reporting. Do not block launch on unused settings IO.
+        if (BuildConfig.SENTRY_DSN.isBlank()) return
         if (started) return
         started = true
         val initialEnabled = runBlocking(Dispatchers.IO) {

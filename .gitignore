@@ -50,6 +50,7 @@ scripts/*
 !scripts/release_beta.py
 # Fork: the release workflow runs this, so it has to be in the repository.
 !scripts/check-torbox-instant.sh
+!scripts/verify-tv-release.py
 !scripts/tests/
 !scripts/tests/*.py
 /supabase
