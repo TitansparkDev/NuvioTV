@@ -307,10 +307,13 @@ app/src/main/java/com/nuvio/tv/core/server/SubtitleFontUploadServer.kt
 app/src/main/java/com/nuvio/tv/core/server/SubtitleFontWebPage.kt
 app/src/main/java/com/nuvio/tv/core/streams/PlaybackAvailability.kt
 app/src/main/java/com/nuvio/tv/core/streams/PlaybackLinkWarmup.kt
+app/src/main/java/com/nuvio/tv/core/streams/PlaybackPrefetchCoordinator.kt
 app/src/main/java/com/nuvio/tv/core/streams/PlaybackWarmupStore.kt
+app/src/main/java/com/nuvio/tv/core/streams/PrefetchTarget.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgePresentation.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeRules.kt
 app/src/main/java/com/nuvio/tv/core/streams/StreamBadgeSettings.kt
+app/src/main/java/com/nuvio/tv/core/streams/StreamSearchBingeGroup.kt
 app/src/main/java/com/nuvio/tv/core/streams/YouTubeStreamResolver.kt
 app/src/main/java/com/nuvio/tv/core/sync/AddonSyncService.kt
 app/src/main/java/com/nuvio/tv/core/sync/CollectionSyncService.kt

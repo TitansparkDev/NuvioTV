@@ -32,10 +32,11 @@ class DirectDebridStreamPreparer @Inject constructor(
         episode: Int?,
         playerSettings: PlayerSettings,
         installedAddonNames: Set<String>,
+        minimumLimit: Int = 0,
         onPrepared: (original: Stream, prepared: Stream) -> Unit
     ) {
         val settings = dataStore.settings.first()
-        val limit = settings.instantPlaybackPreparationLimit
+        val limit = maxOf(settings.instantPlaybackPreparationLimit, minimumLimit)
         if (!settings.canResolvePlayableLinks || limit <= 0) return
 
         val candidates = prioritizeCandidates(

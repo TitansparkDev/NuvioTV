@@ -542,10 +542,9 @@ class StreamScreenViewModel @Inject constructor(
             autoPlayInstalledAddonNames = installedAddonOrder.toSet()
             val directDebridSourceNames = emptyList<String>()
             val directDebridAvailable = false
-            val persistedBingeGroup = if (playerSettings.streamAutoPlayPreferBingeGroupForNextEpisode &&
-                playerSettings.streamAutoPlayReuseBingeGroup) {
-                contentId?.let { bingeGroupCacheDataStore.get(it) }
-            } else null
+            val persistedBingeGroup = com.nuvio.tv.core.streams.StreamSearchBingeGroup.resolve(
+                playerSettings, bingeGroupCacheDataStore, contentId
+            )
             val persistedFilename = if (persistedBingeGroup != null) {
                 contentId?.let { bingeGroupCacheDataStore.getFilename(it) }
             } else null
