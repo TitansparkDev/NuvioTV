@@ -853,6 +853,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingAiringRules.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingCachePolicy.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingNextUpReconciliation.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingNoNextUpSeeds.kt
+app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingPrefetchTarget.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/ContinueWatchingReleaseRefresh.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/GridHomeContent.kt
 app/src/main/java/com/nuvio/tv/ui/screens/home/HeroBackdropState.kt
@@ -1503,6 +1504,7 @@ app/src/test/java/com/nuvio/tv/core/server/DebridFormatterConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/server/StreamBadgeConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackAvailabilityTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackLinkWarmupTest.kt
+app/src/test/java/com/nuvio/tv/core/streams/PlaybackPrefetchCoordinatorTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/YouTubeStreamResolverTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSettingsSyncServiceTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSyncSupportTest.kt
@@ -1724,6 +1726,7 @@ app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingMarkWatchedTest.k
 app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingNextUpOverlayTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingNextUpReconciliationTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingNoNextUpSeedsTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingPrefetchTargetTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingReleaseRefreshTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/home/ContinueWatchingUpcomingSortTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/home/HomeEnrichmentRepositoryBoundaryTest.kt
