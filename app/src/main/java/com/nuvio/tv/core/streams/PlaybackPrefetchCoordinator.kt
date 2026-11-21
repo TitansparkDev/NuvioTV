@@ -18,15 +18,17 @@ import com.nuvio.tv.domain.repository.StreamRepository
 class PlaybackPrefetchCoordinator @Inject constructor(
     private val playerSettings: PlayerSettingsDataStore,
     private val streamRepository: StreamRepository,
-    private val profileManager: ProfileManager
+    private val profileManager: ProfileManager,
+    private val linkWarmup: PlaybackLinkWarmup
 ) {
     internal constructor(
         playerSettings: PlayerSettingsDataStore,
         streamRepository: StreamRepository,
         profileManager: ProfileManager,
+        linkWarmup: PlaybackLinkWarmup,
         scope: CoroutineScope,
         dwellMs: Long = 1_000L
-    ) : this(playerSettings, streamRepository, profileManager) {
+    ) : this(playerSettings, streamRepository, profileManager, linkWarmup) {
         this.scope = scope
         this.dwellMs = dwellMs
     }
@@ -43,6 +45,7 @@ class PlaybackPrefetchCoordinator @Inject constructor(
             val enabled = when (target.kind) {
                 PrefetchTarget.Kind.MOVIE_DETAILS -> settings.prefetchMovieOnDetails
                 PrefetchTarget.Kind.EPISODE_DETAILS -> settings.prefetchEpisodeOnDetails
+                PrefetchTarget.Kind.CONTINUE_WATCHING -> settings.prefetchContinueWatching
                 PrefetchTarget.Kind.NEXT_EPISODE -> false
             }
             if (!enabled || target.profileId != profileManager.activeProfileId.value) return@launch
@@ -51,6 +54,17 @@ class PlaybackPrefetchCoordinator @Inject constructor(
             if (cached != null) return@launch
             streamRepository.getStreamsFromAllAddons(target.type, target.videoId, target.season, target.episode)
                 .collect {}
+        }
+    }
+
+    fun warmCachedLink(target: PrefetchTarget, url: String, headers: Map<String, String>, filename: String?) {
+        pending?.cancel()
+        pending = scope.launch {
+            if (target.profileId != profileManager.activeProfileId.value) return@launch
+            val settings = playerSettings.playerSettings.first()
+            if (!settings.prefetchContinueWatching) return@launch
+            delay(dwellMs)
+            linkWarmup.warm(url, headers, filename, null, false)
         }
     }
 

@@ -9,5 +9,5 @@ data class PrefetchTarget(
     val episode: Int? = null,
     val kind: Kind
 ) {
-    enum class Kind { MOVIE_DETAILS, EPISODE_DETAILS, NEXT_EPISODE }
+    enum class Kind { MOVIE_DETAILS, EPISODE_DETAILS, NEXT_EPISODE, CONTINUE_WATCHING }
 }
