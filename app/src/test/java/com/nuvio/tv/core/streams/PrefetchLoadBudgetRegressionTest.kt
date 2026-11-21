@@ -17,6 +17,37 @@ import org.junit.Test
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PrefetchLoadBudgetRegressionTest {
+    @Test fun `continue watching cards under dwell budget do not search or warm`() = runTest {
+        val fixture = Fixture(this)
+        repeat(10) { index ->
+            fixture.coordinator.request(fixture.target(index, kind = PrefetchTarget.Kind.CONTINUE_WATCHING))
+            testScheduler.advanceTimeBy(900)
+            testScheduler.runCurrent()
+        }
+        assertEquals(0, fixture.searches)
+        assertEquals(0, fixture.warmups)
+    }
+
+    @Test fun `cached continue watching link warms after dwell without searching`() = runTest {
+        val fixture = Fixture(this)
+        fixture.coordinator.warmCachedLink(
+            fixture.target(0, kind = PrefetchTarget.Kind.CONTINUE_WATCHING),
+            "https://example.test/video.mp4", emptyMap(), "video.mp4"
+        )
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+        assertEquals(0, fixture.searches)
+        assertEquals(1, fixture.warmups)
+    }
+
+    @Test fun `disabled continue watching prefetch does not search`() = runTest {
+        val fixture = Fixture(this, PlayerSettings(prefetchContinueWatching = false))
+        fixture.coordinator.request(fixture.target(0, kind = PrefetchTarget.Kind.CONTINUE_WATCHING))
+        testScheduler.advanceTimeBy(2_000)
+        testScheduler.runCurrent()
+        assertEquals(0, fixture.searches)
+    }
+
     @Test fun `disabled settings and quick exits do not search`() = runTest {
         val fixture = Fixture(this, PlayerSettings(prefetchMovieOnDetails = false), dwellMs = 1_000)
         repeat(10) { fixture.coordinator.request(fixture.target(it)); testScheduler.advanceTimeBy(900); testScheduler.runCurrent() }
@@ -57,10 +88,13 @@ class PrefetchLoadBudgetRegressionTest {
         val repository = mockk<StreamRepository>(relaxed = true)
         private val settingsStore = mockk<PlayerSettingsDataStore>()
         private val profile = mockk<ProfileManager>()
+        private val warmup = mockk<PlaybackLinkWarmup>(relaxed = true)
         private val activeId = MutableStateFlow(1)
         private val prefetchedKeys = mutableSetOf<Pair<String, String>>()
         var searches = 0
+        var warmups = 0
         init {
+            coEvery { warmup.warm(any(), any(), any(), any(), any()) } answers { warmups++; true }
             every { settingsStore.playerSettings } returns MutableStateFlow(settings)
             every { profile.activeProfileId } returns activeId
             coEvery { repository.getCachedStreamsFromAllAddons(any(), any(), any(), any()) } returns null
@@ -71,7 +105,7 @@ class PrefetchLoadBudgetRegressionTest {
             }
         }
         val coordinator = PlaybackPrefetchCoordinator(
-            settingsStore, repository, profile, mockk<PlaybackLinkWarmup>(), scope, dwellMs
+            settingsStore, repository, profile, warmup, scope, dwellMs
         ) { testTime }
         private var testTime: Long = 0
         fun target(index: Int, type: String = "movie", kind: PrefetchTarget.Kind = PrefetchTarget.Kind.MOVIE_DETAILS) =
