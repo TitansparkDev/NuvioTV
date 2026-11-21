@@ -9,6 +9,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.ArrayDeque
 import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.data.local.PlayerSettingsDataStore
 import com.nuvio.tv.domain.repository.StreamRepository
@@ -27,15 +28,21 @@ class PlaybackPrefetchCoordinator @Inject constructor(
         profileManager: ProfileManager,
         linkWarmup: PlaybackLinkWarmup,
         scope: CoroutineScope,
-        dwellMs: Long = 1_000L
+        dwellMs: Long = 1_000L,
+        nowMs: () -> Long = System::currentTimeMillis
     ) : this(playerSettings, streamRepository, profileManager, linkWarmup) {
         this.scope = scope
         this.dwellMs = dwellMs
+        this.nowMs = nowMs
     }
 
     private var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var dwellMs: Long = 1_000L
+    private var nowMs: () -> Long = System::currentTimeMillis
     private var pending: Job? = null
+    private val requestTimes = ArrayDeque<Long>()
+    private val maxRequestsPerHour = 20
+    private val hourMs = 60 * 60 * 1_000L
 
     fun request(target: PrefetchTarget) {
         if (target.kind == PrefetchTarget.Kind.NEXT_EPISODE) return
@@ -52,6 +59,14 @@ class PlaybackPrefetchCoordinator @Inject constructor(
             delay(dwellMs)
             val cached = streamRepository.getCachedStreamsFromAllAddons(target.type, target.videoId, target.season, target.episode)
             if (cached != null) return@launch
+            val now = nowMs()
+            synchronized(requestTimes) {
+                while (requestTimes.isNotEmpty() && now - requestTimes.first() >= hourMs) {
+                    requestTimes.removeFirst()
+                }
+                if (requestTimes.size >= maxRequestsPerHour) return@launch
+                requestTimes.addLast(now)
+            }
             streamRepository.getStreamsFromAllAddons(target.type, target.videoId, target.season, target.episode)
                 .collect {}
         }

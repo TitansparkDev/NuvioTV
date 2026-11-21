@@ -1505,6 +1505,7 @@ app/src/test/java/com/nuvio/tv/core/server/StreamBadgeConfigServerTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackAvailabilityTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackLinkWarmupTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/PlaybackPrefetchCoordinatorTest.kt
+app/src/test/java/com/nuvio/tv/core/streams/PrefetchLoadBudgetRegressionTest.kt
 app/src/test/java/com/nuvio/tv/core/streams/YouTubeStreamResolverTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSettingsSyncServiceTest.kt
 app/src/test/java/com/nuvio/tv/core/sync/HomeCatalogSyncSupportTest.kt
