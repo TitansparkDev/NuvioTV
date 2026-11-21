@@ -8,7 +8,7 @@ import org.junit.Test
 class ReusedLinkFallbackPolicyTest {
     @Test fun searchesForExpiredOrUnavailableReusedLinksBeforeFirstFrame() {
         listOf(401, 403, 404, 410).forEach { status ->
-            val cause = HttpDataSource.InvalidResponseCodeException(status, "", emptyMap(), null, null)
+            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), null, ByteArray(0))
             val error = PlaybackException("http", cause, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
             assertEquals(true, ReusedLinkFallbackPolicy.shouldSearchAgain(error, true, false, false, false))
         }
