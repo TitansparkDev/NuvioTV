@@ -6,7 +6,7 @@ import org.junit.Test
 
 class PlayerSettingsInstantPlaybackTest {
     @Test fun `fast streaming defaults enable instant playback and parallel downloads`() {
-        assertEquals(PlayerSettings.FastStreamingDefaults(), PlayerSettings.fastStreamingDefaults())
+        assertEquals(FastStreamingDefaults(), PlayerSettings.fastStreamingDefaults())
         val settings = PlayerSettings()
         assertEquals(true, settings.prefetchMovieOnDetails)
         assertEquals(true, settings.prefetchEpisodeOnDetails)
