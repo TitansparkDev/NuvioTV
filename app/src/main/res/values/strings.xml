@@ -1,4 +1,9 @@
 <resources>
+    <string name="instant_playback_title">Instant playback</string>
+    <string name="instant_playback_movie">Find sources when I open a movie</string>
+    <string name="instant_playback_episode">Find sources for the episode I\'m up to</string>
+    <string name="instant_playback_top_source">Get the top source ready</string>
+    <string name="instant_playback_note">Each title you open sends the same source search Play would, at most 20 an hour, and only after you stay on the page for a second. Turn these off to search only when you press Play.</string>
     <string name="app_name">Nuvio</string>
     <string name="tv_channel_continue_watching">Continue Watching</string>
     <string name="type_movie">Movie</string>

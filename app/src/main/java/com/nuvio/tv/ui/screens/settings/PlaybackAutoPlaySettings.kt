@@ -79,6 +79,7 @@ internal fun PlaybackStreamSelectionSection(
     onOpenDialog: (PlaybackDialog) -> Unit,
     onNavigateToAddonSpeed: () -> Unit = {}
 ) {
+    InstantPlaybackControls(settings, onUpdate)
     val effectiveAutoPlaySource = if (
         !AppFeaturePolicy.pluginsEnabled &&
         settings.streamAutoPlaySource == StreamAutoPlaySource.ENABLED_PLUGINS_ONLY
