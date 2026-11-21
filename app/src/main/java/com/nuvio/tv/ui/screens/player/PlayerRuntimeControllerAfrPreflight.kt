@@ -4,6 +4,7 @@ import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.nuvio.tv.core.player.FrameRateUtils
+import com.nuvio.tv.core.streams.PlaybackWarmupStore
 import com.nuvio.tv.data.local.FrameRateMatchingMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,13 +74,14 @@ internal suspend fun PlayerRuntimeController.runAfrPreflightIfEnabled(
     val probeHeaders = FrameRateUtils.extractorProbeHeaders(headers)
     val effectiveMimeType = mimeType ?: currentStreamMimeType
     val filename = currentFilename
+    val effectiveUrl = if (!PlayerMediaSourceFactory.isLoopbackUrl(url) && (url.startsWith("http://", true) || url.startsWith("https://", true))) PlaybackWarmupStore.effectiveUrl(url, headers) else url
     val deadlineElapsedRealtime = SystemClock.elapsedRealtime() + AFR_PREFLIGHT_TOTAL_TIMEOUT_MS
 
     fun remainingMs(): Long =
         (deadlineElapsedRealtime - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
 
     try {
-        val cached = FrameRateUtils.getCachedFrameRate(url, headers, filename)
+        val cached = FrameRateUtils.getCachedFrameRate(effectiveUrl, headers, filename)
         if (cached != null) {
             Log.d(PlayerRuntimeController.TAG, "AFR preflight: cache hit! Using cached FPS=${cached.snapped}")
             _uiState.update {
@@ -141,7 +143,7 @@ internal suspend fun PlayerRuntimeController.runAfrPreflightIfEnabled(
                     val probeJob = coroutineContext[Job]
                     FrameRateUtils.detectFrameRateWithOkHttpProbe(
                         context = context,
-                        sourceUrl = url,
+                        sourceUrl = effectiveUrl,
                         headers = streamHeaders,
                         mimeType = effectiveMimeType,
                         filename = filename,
@@ -164,7 +166,7 @@ internal suspend fun PlayerRuntimeController.runAfrPreflightIfEnabled(
                     withContext(Dispatchers.IO) {
                         FrameRateUtils.detectFrameRateFromNextLib(
                             context = context,
-                            sourceUrl = url,
+                            sourceUrl = effectiveUrl,
                             headers = streamHeaders,
                             mimeType = effectiveMimeType,
                             filename = filename
@@ -195,7 +197,7 @@ internal suspend fun PlayerRuntimeController.runAfrPreflightIfEnabled(
                         withContext(Dispatchers.IO) {
                             FrameRateUtils.detectFrameRateFromExtractor(
                                 context = context,
-                                sourceUrl = url,
+                                sourceUrl = effectiveUrl,
                                 headers = probeHeaders
                             )
                         }
@@ -212,7 +214,7 @@ internal suspend fun PlayerRuntimeController.runAfrPreflightIfEnabled(
             return
         }
 
-        FrameRateUtils.cacheFrameRate(url, headers, detection, currentFilename)
+        FrameRateUtils.cacheFrameRate(effectiveUrl, headers, detection, currentFilename)
         if (isStale()) return
 
         _uiState.update {

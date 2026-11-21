@@ -1029,6 +1029,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/player/SubtitleTimingDialog.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/TorrentOverlay.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/Vc1VideoFormatHeuristics.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/VodCacheWriteSink.kt
+app/src/main/java/com/nuvio/tv/ui/screens/player/WarmUrlFallbackPolicy.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/audiosync/AudioSpotSampler.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/audiosync/AudioSubtitleSyncController.kt
 app/src/main/java/com/nuvio/tv/ui/screens/player/audiosync/AudioSyncDecoder.kt
@@ -1804,6 +1805,7 @@ app/src/test/java/com/nuvio/tv/ui/screens/player/TunneledSurfaceResizeModeTest.k
 app/src/test/java/com/nuvio/tv/ui/screens/player/UsbAudioRouteTunnelingTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/Vc1VideoFormatHeuristicsTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/VodCacheAutoSizeTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/player/WarmUrlFallbackPolicyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/audiosync/AsrMatchingTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/audiosync/AsrModelFilesTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/player/audiosync/AsrRateAndStepTest.kt

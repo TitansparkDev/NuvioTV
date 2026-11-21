@@ -30,6 +30,7 @@ import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.text.SubtitleParser
 import com.nuvio.tv.NuvioApplication
 import com.nuvio.tv.R
+import com.nuvio.tv.core.streams.PlaybackWarmupStore
 import com.nuvio.tv.core.util.findCause
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -195,7 +196,9 @@ internal class PlayerMediaSourceFactory(private val context: Context) {
             PlayerPlaybackNetworking.createDataSourceFactory(context, sanitizedHeaders)
         }
 
-        val mediaItemBuilder = MediaItem.Builder().setUri(url)
+        val uriUrl = if (!isHls && !isDash && !isLoopbackUrl(url) &&
+            (url.startsWith("http://", true) || url.startsWith("https://", true))) PlaybackWarmupStore.effectiveUrl(url, sanitizedHeaders) else url
+        val mediaItemBuilder = MediaItem.Builder().setUri(uriUrl)
         resolvedMimeType?.let(mediaItemBuilder::setMimeType)
         filename?.takeIf { it.isNotBlank() }?.let(mediaItemBuilder::setMediaId)
         // Adaptive sources index their own segments, so a custom key only applies to progressive.

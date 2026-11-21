@@ -8,6 +8,7 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.mediacodec.MediaCodecRenderer
 import com.nuvio.tv.R
 import com.nuvio.tv.core.debrid.DirectDebridResolveResult
+import com.nuvio.tv.core.streams.PlaybackWarmupStore
 import com.nuvio.tv.core.util.findCause
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.update
@@ -254,6 +255,11 @@ internal fun PlayerRuntimeController.attemptAutoRetry(
     }
     if (!isRetryablePlaybackError(error)) return false
     if (errorRetryCount >= MAX_AUTO_RETRIES) return false
+
+    val substitutedWarmUrl = PlaybackWarmupStore.effectiveUrl(currentStreamUrl, currentHeaders) != currentStreamUrl
+    if (WarmUrlFallbackPolicy.shouldFallBack(error, substitutedWarmUrl, hasRenderedFirstFrame, errorRetryCount > 0)) {
+        PlaybackWarmupStore.invalidate(currentStreamUrl, currentHeaders)
+    }
 
     val paused = userPausedManually
     val attempt = errorRetryCount
