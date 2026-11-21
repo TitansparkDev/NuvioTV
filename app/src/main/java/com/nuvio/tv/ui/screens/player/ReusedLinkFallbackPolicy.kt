@@ -15,7 +15,12 @@ internal object ReusedLinkFallbackPolicy {
         val status = error.findInvalidResponseCodeException()?.responseCode
         val timeout = error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ||
             error.findCause<SocketTimeoutException>() != null
-        return fromReusedLink && !firstFrameRendered && !alreadySearched && !torboxRefreshPending &&
-            (status in setOf(401, 403, 404, 410) || timeout)
+        return shouldSearchAgain(status, timeout, fromReusedLink, firstFrameRendered, alreadySearched, torboxRefreshPending)
     }
+
+    internal fun shouldSearchAgain(
+        status: Int?, timeout: Boolean, fromReusedLink: Boolean, firstFrameRendered: Boolean,
+        alreadySearched: Boolean, torboxRefreshPending: Boolean
+    ): Boolean = fromReusedLink && !firstFrameRendered && !alreadySearched && !torboxRefreshPending &&
+        (status in setOf(401, 403, 404, 410) || timeout)
 }
