@@ -18,6 +18,7 @@ import com.nuvio.tv.core.player.BitrateAwareLoadControl
 import com.nuvio.tv.core.player.LastPlaybackDiagnostics
 import com.nuvio.tv.core.debrid.DirectDebridResolver
 import com.nuvio.tv.core.debrid.DirectDebridStreamPreparer
+import com.nuvio.tv.core.streams.PlaybackLinkWarmup
 import com.nuvio.tv.core.cloud.CloudLibraryPlaybackContext
 import com.nuvio.tv.core.cloud.CloudLibraryPlaybackProgressStore
 import com.nuvio.tv.core.cloud.CloudLibraryPlaybackSessionStore
@@ -102,6 +103,7 @@ class PlayerRuntimeController(
     internal val directDebridResolver: DirectDebridResolver,
     internal val youTubeStreamResolver: com.nuvio.tv.core.streams.YouTubeStreamResolver,
     internal val directDebridStreamPreparer: DirectDebridStreamPreparer,
+    internal val playbackLinkWarmup: PlaybackLinkWarmup,
     internal val cloudLibraryRepository: CloudLibraryRepository,
     internal val cloudPlaybackProgressStore: CloudLibraryPlaybackProgressStore,
     internal val cloudPlaybackSessionStore: CloudLibraryPlaybackSessionStore,
@@ -551,6 +553,7 @@ class PlayerRuntimeController(
     internal var nextEpisodeVideo: Video? = null
     internal var nextEpisodePreloadJob: Job? = null
     internal var nextEpisodePreparationTarget: NextEpisodePreparationPolicy.Target? = null
+    internal var nextEpisodeWarmedTarget: NextEpisodePreparationPolicy.Target? = null
     internal var nextEpisodePreloadTriggered: Boolean = false
     internal var userPausedManually = false
 

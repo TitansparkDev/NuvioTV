@@ -2344,6 +2344,23 @@ internal fun PlayerRuntimeController.playNextEpisode(
                 // Bank it and stop. Nothing is shown and nothing plays; the threshold
                 // will find this waiting for it. The sources the fallback already tried
                 // travel with it, so a banked stream that fails to start falls back on from them.
+                val preparationTarget = nextEpisodePreparationTarget
+                if (streamToPlay != null && preparationTarget != null &&
+                    NextEpisodePreparationPolicy.shouldWarm(
+                        streamToPlay,
+                        playerSettings,
+                        alreadyWarmed = nextEpisodeWarmedTarget == preparationTarget
+                    )
+                ) {
+                    playbackLinkWarmup.warm(
+                        url = streamToPlay.url.orEmpty(),
+                        headers = streamToPlay.behaviorHints?.proxyHeaders?.request.orEmpty(),
+                        filename = streamToPlay.behaviorHints?.filename,
+                        mimeType = null,
+                        frameRateMatchingEnabled = playerSettings.frameRateMatchingMode != com.nuvio.tv.data.local.FrameRateMatchingMode.OFF
+                    )
+                    nextEpisodeWarmedTarget = preparationTarget
+                }
                 prefetchedNextStream = streamToPlay
                 prefetchedNextVideoId = nextVideo.id
                 prefetchedNextAutoSelection = resolveRun?.let { run ->

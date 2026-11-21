@@ -1,7 +1,9 @@
 package com.nuvio.tv.ui.screens.player
 
 import com.nuvio.tv.data.local.NextEpisodeThresholdMode
+import com.nuvio.tv.data.local.PlayerSettings
 import com.nuvio.tv.data.repository.SkipInterval
+import com.nuvio.tv.domain.model.Stream
 import com.nuvio.tv.domain.model.Video
 import java.time.Clock
 import java.time.Instant
@@ -13,6 +15,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PlayerNextEpisodeRulesTest {
+
+    @Test
+    fun `warm policy requires enabled toggle eligible URL and unwarmed target`() {
+        val settings = PlayerSettings()
+        val stream = Stream(name = null, title = null, description = null, url = "https://cdn.example/ep.mkv", ytId = null, infoHash = null, fileIdx = null, externalUrl = null, behaviorHints = null, addonName = "addon", addonLogo = null)
+        assertTrue(NextEpisodePreparationPolicy.shouldWarm(stream, settings.copy(prefetchPrepareTopSource = true), false))
+        assertFalse(NextEpisodePreparationPolicy.shouldWarm(stream, settings.copy(prefetchPrepareTopSource = false), false))
+        assertFalse(NextEpisodePreparationPolicy.shouldWarm(stream, settings, true))
+        assertFalse(NextEpisodePreparationPolicy.shouldWarm(stream.copy(url = "magnet:?xt=abc"), settings, false))
+        assertFalse(NextEpisodePreparationPolicy.shouldWarm(stream.copy(url = null), settings, false))
+    }
 
     @Test
     fun `preparation policy excludes unavailable unsafe targets`() {
