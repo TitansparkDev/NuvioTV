@@ -1,5 +1,8 @@
 package com.nuvio.tv.ui.screens.player
 
+import com.nuvio.tv.data.local.PlayerSettings
+import com.nuvio.tv.domain.model.Stream
+
 /** Identity and eligibility for the one background preparation owned by a player. */
 internal object NextEpisodePreparationPolicy {
     data class Target(
@@ -19,4 +22,11 @@ internal object NextEpisodePreparationPolicy {
         partyLocked: Boolean,
         manualPickerRequired: Boolean,
     ): Boolean = enabled && hasAired && !cloud && !partyLocked && !manualPickerRequired
+
+    fun shouldWarm(stream: Stream, settings: PlayerSettings, alreadyWarmed: Boolean): Boolean {
+        val url = stream.url?.trim().orEmpty()
+        return settings.prefetchPrepareTopSource && !alreadyWarmed &&
+            (url.startsWith("http://", true) || url.startsWith("https://", true)) &&
+            !stream.isExternal()
+    }
 }
