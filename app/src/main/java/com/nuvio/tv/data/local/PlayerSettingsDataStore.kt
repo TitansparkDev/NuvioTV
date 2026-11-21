@@ -406,7 +406,7 @@ data class PlayerSettings(
     /** Fork: play a stream chosen ahead of time immediately, with no card and no countdown. */
     val nextEpisodeSilentAutoPlay: Boolean = true,
     val streamReuseLastLinkEnabled: Boolean = true,
-    val streamReuseLastLinkCacheHours: Int = 1,
+    val streamReuseLastLinkCacheHours: Int = 24,
     val externalPlayerForwardSubtitles: Boolean = false,
     val externalPlayerSendSkipSegments: Boolean = false,
     val subtitleOrganizationMode: SubtitleOrganizationMode = SubtitleOrganizationMode.NONE,
