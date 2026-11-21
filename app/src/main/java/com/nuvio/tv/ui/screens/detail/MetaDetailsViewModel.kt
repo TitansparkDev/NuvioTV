@@ -9,6 +9,9 @@ import com.nuvio.tv.core.profile.ProfileManager
 import com.nuvio.tv.core.streams.PlaybackPrefetchCoordinator
 import com.nuvio.tv.core.streams.PlaybackAvailability
 import com.nuvio.tv.core.streams.PrefetchTarget
+import com.nuvio.tv.data.local.PluginDataStore
+import com.nuvio.tv.data.mediaserver.ServerStreams
+import com.nuvio.tv.domain.repository.AddonRepository
 import com.nuvio.tv.core.network.NetworkResult
 import com.nuvio.tv.core.poster.withCustomPosterUrls
 import com.nuvio.tv.core.tmdb.TmdbMetadataService
@@ -122,6 +125,9 @@ class MetaDetailsViewModel @Inject constructor(
     private val playerSettingsDataStore: PlayerSettingsDataStore,
     private val profileManager: ProfileManager,
     private val playbackPrefetchCoordinator: PlaybackPrefetchCoordinator,
+    private val addonRepository: AddonRepository,
+    private val pluginDataStore: PluginDataStore,
+    private val serverStreams: ServerStreams,
     private val metaDetailsSessionState: MetaDetailsSessionState,
     private val watchedSeriesStateHolder: com.nuvio.tv.data.local.WatchedSeriesStateHolder,
     val posterOptions: com.nuvio.tv.ui.components.posteroptions.PosterOptionsController,
@@ -203,6 +209,11 @@ class MetaDetailsViewModel @Inject constructor(
         observeEpisodeOptionsOverlayStyle()
         observeOverallRatingsVisibility()
         observeDetailImdbRatingsVisibility()
+        viewModelScope.launch {
+            uiState.map { listOf(it.meta, it.nextToWatch, it.selectedSeason, it.episodesForSeason) }
+                .distinctUntilChanged()
+                .collect { requestDetailsPrefetch() }
+        }
         viewModelScope.launch {
             layoutPreferenceDataStore.posterCardCornerRadiusDp
                 .collect { _posterCardCornerRadiusDp.value = it }
@@ -352,14 +363,22 @@ class MetaDetailsViewModel @Inject constructor(
 
     private fun requestDetailsPrefetch() {
         viewModelScope.launch {
-            val state = _uiState.value
+            val state = uiState.value
             val meta = state.meta ?: return@launch
             val settings = playerSettingsDataStore.playerSettings.first()
-            // Availability is checked by the details UI before hero playback. The coordinator
-            // performs the same speculative lookup only when an enabled addon can serve it.
+            val addons = addonRepository.getInstalledAddons().first()
+            val pluginsEnabled = pluginDataStore.pluginsEnabled.first()
+            val scrapers = if (pluginsEnabled) pluginDataStore.scrapers.first().filter { it.enabled } else emptyList()
+            val availability = PlaybackAvailability(
+                addons = addons,
+                scrapers = scrapers,
+                isLoaded = true,
+                cachedMeta = metaRepository::getCachedMeta,
+                serverStreams = serverStreams::canServe
+            )
             val target = detailsPrefetchTarget(
                 profileManager.activeProfileId.value, meta, state.nextToWatch,
-                state.episodesForSeason, settings, PlaybackAvailability()
+                state.episodesForSeason, settings, availability
             )
             if (target != lastDetailsPrefetchTarget) {
                 lastDetailsPrefetchTarget?.let(playbackPrefetchCoordinator::cancelPending)

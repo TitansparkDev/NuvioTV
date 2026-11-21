@@ -1705,6 +1705,7 @@ app/src/test/java/com/nuvio/tv/ui/screens/collection/CollectionManagementViewMod
 app/src/test/java/com/nuvio/tv/ui/screens/collection/CollectionSourceKeyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailEpisodeShuffleTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailSeasonSelectionTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailsPrefetchTargetTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeOptionsOverlayTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeOverlayNavigationTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeWatchedProjectionTest.kt
