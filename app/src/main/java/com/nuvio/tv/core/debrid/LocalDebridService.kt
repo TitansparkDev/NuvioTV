@@ -7,6 +7,9 @@ import android.os.SystemClock
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -91,17 +94,41 @@ class LocalDebridService @Inject constructor(
         return result
     }
 
-    private suspend fun fetchTorbox(apiKey: String, hashes: List<String>): Map<String, LocalDebridCachedItem>? = try {
-        val response = torboxApi.checkCached("Bearer ${apiKey.trim()}", body = TorboxCheckCachedRequestDto(hashes))
-        val body = response.body()
-        if (!response.isSuccessful || body?.success != true || body.data == null) null
-        else body.data.mapKeys { it.key.trim().lowercase() }.mapValues { (_, value) ->
-            LocalDebridCachedItem(value.name, value.size)
+    /**
+     * Aliases are resolved before the answers are cached: TorBox answers an alias under its canonical
+     * hash, and a cached miss for the alias would hide it for the whole cache lifetime.
+     */
+    private suspend fun fetchTorbox(apiKey: String, hashes: List<String>): Map<String, LocalDebridCachedItem>? {
+        val cached = requestTorboxCached(apiKey, hashes) ?: return null
+        return resolveTorboxAliasMatches(cached, hashes) { hash ->
+            requestTorboxCached(apiKey, listOf(hash))
         }
-    } catch (error: Exception) {
-        if (error is CancellationException) throw error
-        null
     }
+
+    private suspend fun requestTorboxCached(
+        apiKey: String,
+        hashes: List<String>
+    ): Map<String, LocalDebridCachedItem>? =
+        try {
+            val response = torboxApi.checkCached(
+                authorization = "Bearer ${apiKey.trim()}",
+                body = TorboxCheckCachedRequestDto(hashes = hashes)
+            )
+            val body = response.body()
+            if (!response.isSuccessful || body?.success == false) {
+                null
+            } else {
+                body?.data.orEmpty().mapKeys { it.key.lowercase() }.mapValues { (_, value) ->
+                    LocalDebridCachedItem(
+                        name = value.name,
+                        size = value.size
+                    )
+                }
+            }
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            null
+        }
 
     private suspend fun checkPremiumizeCached(
         apiKey: String,
@@ -135,4 +162,43 @@ class LocalDebridService @Inject constructor(
         map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
             .distinct()
+}
+
+/**
+ * TorBox matches hashes through its alternative-hash index and answers with the
+ * canonical hash as key, so an alias hit would otherwise read as a cache miss.
+ */
+internal suspend fun resolveTorboxAliasMatches(
+    cached: Map<String, LocalDebridCachedItem>,
+    requestedHashes: List<String>,
+    fetchCached: suspend (String) -> Map<String, LocalDebridCachedItem>? = { null }
+): Map<String, LocalDebridCachedItem> {
+    if (cached.keys.all { it in requestedHashes }) return cached
+    // One requested hash: every returned entry can only be its match.
+    if (requestedHashes.size == 1) {
+        val item = cached.values.firstOrNull() ?: return cached
+        return mapOf(requestedHashes.single() to item)
+    }
+    val resolved = cached.toMutableMap()
+    val matches = coroutineScope {
+        requestedHashes
+            .filter { it !in resolved }
+            .map { hash ->
+                async {
+                    val item = try {
+                        fetchCached(hash)?.values?.firstOrNull()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Exception) {
+                        null
+                    }
+                    hash to item
+                }
+            }
+            .awaitAll()
+    }
+    matches.forEach { (hash, item) ->
+        if (item != null) resolved[hash] = item
+    }
+    return resolved
 }

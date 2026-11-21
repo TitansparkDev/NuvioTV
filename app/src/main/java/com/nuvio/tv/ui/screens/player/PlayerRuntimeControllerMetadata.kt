@@ -478,6 +478,7 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
             streamAutoPlayNextEpisodeEnabledSetting && nextEpisodeSilentAutoPlaySetting
         ) {
             val target = nextEpisodeVideo
+            val bankedAutoSelection = prefetchedNextAutoSelection
             clearNextEpisodePrefetch()
             _uiState.update {
                 it.copy(
@@ -490,7 +491,8 @@ internal fun PlayerRuntimeController.evaluatePostPlayOverlayVisibility(positionM
                 switchToEpisodeStream(
                     stream = banked,
                     forcedTargetVideo = target,
-                    isAutoPlay = true
+                    isAutoPlay = true,
+                    autoSelection = bankedAutoSelection
                 )
             }
             return

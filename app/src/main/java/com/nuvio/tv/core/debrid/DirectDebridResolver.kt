@@ -32,17 +32,20 @@ class DirectDebridResolver @Inject constructor(
     private val resolvedCache = ConcurrentHashMap<String, CachedDirectDebridResolve>()
     private val inFlightResolves = mutableMapOf<String, Deferred<DirectDebridResolveResult>>()
 
+    /** [forceRefresh] drops the in-memory resolved link first, so a new one is requested from the provider. */
     suspend fun resolve(
         stream: Stream,
         season: Int?,
-        episode: Int?
-    ): DirectDebridResolveResult = resolveInternal(stream, season, episode, refreshed = false)
+        episode: Int?,
+        forceRefresh: Boolean = false
+    ): DirectDebridResolveResult = resolveInternal(stream, season, episode, refreshed = false, forceRefresh = forceRefresh)
 
     private suspend fun resolveInternal(
         stream: Stream,
         season: Int?,
         episode: Int?,
-        refreshed: Boolean
+        refreshed: Boolean,
+        forceRefresh: Boolean = false
     ): DirectDebridResolveResult {
         if (!shouldResolveToPlayableStream(stream)) {
             return DirectDebridResolveResult.Stale
@@ -52,6 +55,9 @@ class DirectDebridResolver @Inject constructor(
             return resolveUncached(stream, season, episode)
         }
         val cacheKey = identity.key
+        if (forceRefresh) {
+            mutex.withLock { resolvedCache.remove(cacheKey) }
+        }
         getCachedResult(cacheKey)?.let {
             return it
         }
@@ -159,12 +165,13 @@ class DirectDebridResolver @Inject constructor(
     suspend fun resolveToPlayableStream(
         stream: Stream,
         season: Int?,
-        episode: Int?
+        episode: Int?,
+        forceRefresh: Boolean = false
     ): DirectDebridPlayableResult {
         if (!shouldResolveToPlayableStream(stream)) {
             return DirectDebridPlayableResult.Success(stream)
         }
-        return when (val result = resolve(stream, season, episode)) {
+        return when (val result = resolve(stream, season, episode, forceRefresh)) {
             is DirectDebridResolveResult.Success -> DirectDebridPlayableResult.Success(stream.withResolvedDebridUrl(result))
             DirectDebridResolveResult.MissingApiKey -> DirectDebridPlayableResult.MissingApiKey
             DirectDebridResolveResult.NotCached -> DirectDebridPlayableResult.NotCached
@@ -368,7 +375,8 @@ private fun Stream.withResolvedDebridUrl(result: DirectDebridResolveResult.Succe
     copy(
         url = result.url,
         externalUrl = null,
-        behaviorHints = behaviorHints.mergeResolvedDebridHints(result)
+        behaviorHints = behaviorHints.mergeResolvedDebridHints(result),
+        debridResolved = true
     )
 
 private fun StreamBehaviorHints?.mergeResolvedDebridHints(
