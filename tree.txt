@@ -821,6 +821,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/detail/CompanyLogosSection.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DateFormat.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailEpisodeShuffle.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailRowWindowAnchor.kt
+app/src/main/java/com/nuvio/tv/ui/screens/detail/DetailsPrefetchTarget.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeOptionsOverlay.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeRatingsSection.kt
 app/src/main/java/com/nuvio/tv/ui/screens/detail/EpisodeShuffleDialog.kt
@@ -1705,6 +1706,7 @@ app/src/test/java/com/nuvio/tv/ui/screens/collection/CollectionManagementViewMod
 app/src/test/java/com/nuvio/tv/ui/screens/collection/CollectionSourceKeyTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailEpisodeShuffleTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailSeasonSelectionTest.kt
+app/src/test/java/com/nuvio/tv/ui/screens/detail/DetailsPrefetchTargetTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeOptionsOverlayTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeOverlayNavigationTest.kt
 app/src/test/java/com/nuvio/tv/ui/screens/detail/EpisodeWatchedProjectionTest.kt
