@@ -66,7 +66,7 @@ internal class DolbyVisionExtractorsFactory(
         // sniff and negotiated core DTS for DTS-HD content. With an inactive
         // config, shouldTransform() is false so non-DV samples pass through.
         if (extractor.javaClass.name == STOCK_MATROSKA_EXTRACTOR) {
-            return DvMatroskaExtractor(
+            return MatroskaClusterResyncExtractor(DvMatroskaExtractor(
                 DefaultSubtitleParserFactory(),
                 /* flags= */ 0,
                 DolbyVisionMatroskaTransformer(
@@ -74,7 +74,7 @@ internal class DolbyVisionExtractorsFactory(
                     stripRpuOnly = stripDvRpu && !config.active,
                     stripHdr10PlusSei = stripHdr10PlusSei,
                 )
-            )
+            ))
         }
         if (!config.active && !stripDvRpu && !stripHdr10PlusSei) return extractor
         val nalFormat = nalFormatFor(extractor) ?: return extractor

@@ -249,6 +249,7 @@ app/src/main/java/com/nuvio/tv/core/player/LetterboxDetector.kt
 app/src/main/java/com/nuvio/tv/core/player/LetterboxRenderPolicy.kt
 app/src/main/java/com/nuvio/tv/core/player/LocalTrailerPlayerPool.kt
 app/src/main/java/com/nuvio/tv/core/player/MatroskaAfrProbe.kt
+app/src/main/java/com/nuvio/tv/core/player/MatroskaClusterResyncExtractor.kt
 app/src/main/java/com/nuvio/tv/core/player/OpenSubtitlesHasher.kt
 app/src/main/java/com/nuvio/tv/core/player/PlayerSessionTracker.kt
 app/src/main/java/com/nuvio/tv/core/player/StreamAutoPlayPolicy.kt
@@ -1470,6 +1471,7 @@ app/src/test/java/com/nuvio/tv/core/player/StreamAutoPlaySelectorTest.kt
 app/src/test/java/com/nuvio/tv/core/player/SubtitleCharsetDetectorTest.kt
 app/src/test/java/com/nuvio/tv/core/player/SubtitleFontValidationTest.kt
 app/src/test/java/com/nuvio/tv/core/player/dvmkv/HevcAlternativeTransferSeiTest.kt
+app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaClusterResyncExtractorTest.kt
 app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaNestedSeekHeadTest.kt
 app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaTracksAfterClustersTest.kt
 app/src/test/java/com/nuvio/tv/core/player/dvmkv/MatroskaTruncatedTailTest.kt
