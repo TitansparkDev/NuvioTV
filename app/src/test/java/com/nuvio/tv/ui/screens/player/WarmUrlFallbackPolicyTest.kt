@@ -2,6 +2,8 @@ package com.nuvio.tv.ui.screens.player
 
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.DataSpec
+import android.net.Uri
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.net.SocketTimeoutException
@@ -9,7 +11,7 @@ import java.net.SocketTimeoutException
 class WarmUrlFallbackPolicyTest {
     @Test fun `eligible status errors fall back only before first frame`() {
         for (status in listOf(401, 403, 404, 410)) {
-            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), null, ByteArray(0))
+            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), DataSpec(Uri.parse("https://example.test/video")), ByteArray(0))
             val error = PlaybackException("http", cause, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
             assertEquals(true, WarmUrlFallbackPolicy.shouldFallBack(error, true, false, false))
             assertEquals(false, WarmUrlFallbackPolicy.shouldFallBack(error, true, true, false))
