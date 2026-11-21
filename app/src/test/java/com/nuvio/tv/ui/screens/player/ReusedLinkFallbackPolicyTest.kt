@@ -2,13 +2,15 @@ package com.nuvio.tv.ui.screens.player
 
 import androidx.media3.common.PlaybackException
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.DataSpec
+import android.net.Uri
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ReusedLinkFallbackPolicyTest {
     @Test fun searchesForExpiredOrUnavailableReusedLinksBeforeFirstFrame() {
         listOf(401, 403, 404, 410).forEach { status ->
-            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), null, ByteArray(0))
+            val cause = HttpDataSource.InvalidResponseCodeException(status, "", null, emptyMap(), DataSpec(Uri.parse("https://example.invalid/video")), ByteArray(0))
             val error = PlaybackException("http", cause, PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS)
             assertEquals(true, ReusedLinkFallbackPolicy.shouldSearchAgain(error, true, false, false, false))
         }
