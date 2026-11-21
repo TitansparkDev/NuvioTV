@@ -7,6 +7,7 @@ import androidx.media3.extractor.ExtractorInput
 import androidx.media3.extractor.ExtractorOutput
 import androidx.media3.extractor.PositionHolder
 import androidx.media3.extractor.SeekMap
+import androidx.media3.extractor.SeekPoint
 import androidx.media3.extractor.TrackOutput
 import com.nuvio.tv.core.player.MatroskaClusterResyncExtractor
 import org.junit.Assert.assertEquals
@@ -55,7 +56,7 @@ class MatroskaClusterResyncExtractorTest {
         var output: ExtractorOutput? = null
         override fun init(output: ExtractorOutput) { this.output = output }
         override fun sniff(input: ExtractorInput) = true
-        override fun read(input: ExtractorInput, seekPosition: PositionHolder) = RESULT_CONTINUE
+        override fun read(input: ExtractorInput, seekPosition: PositionHolder) = 0
         override fun seek(position: Long, timeUs: Long) = Unit
         override fun release() = Unit
     }
@@ -63,6 +64,6 @@ class MatroskaClusterResyncExtractorTest {
     private object EmptySeekMap : SeekMap {
         override fun isSeekable() = true
         override fun getDurationUs() = 0L
-        override fun getSeekPoints(timeUs: Long) = SeekMap.SeekPoints(SeekMap.SeekPoint(0, 0))
+        override fun getSeekPoints(timeUs: Long) = SeekMap.SeekPoints(SeekPoint(0, 0))
     }
 }
