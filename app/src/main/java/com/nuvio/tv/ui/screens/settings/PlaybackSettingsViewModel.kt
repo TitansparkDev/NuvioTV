@@ -463,6 +463,8 @@ class PlaybackSettingsViewModel @Inject constructor(
     suspend fun setPrefetchMovieOnDetails(enabled: Boolean) = playerSettingsDataStore.setPrefetchMovieOnDetails(enabled)
     suspend fun setPrefetchEpisodeOnDetails(enabled: Boolean) = playerSettingsDataStore.setPrefetchEpisodeOnDetails(enabled)
     suspend fun setPrefetchPrepareTopSource(enabled: Boolean) = playerSettingsDataStore.setPrefetchPrepareTopSource(enabled)
+    suspend fun setAutoPlayFastStart(enabled: Boolean) = playerSettingsDataStore.setAutoPlayFastStart(enabled)
+    suspend fun setPrefetchContinueWatching(enabled: Boolean) = playerSettingsDataStore.setPrefetchContinueWatching(enabled)
 
     suspend fun setAllowLargeTargetBuffer(enabled: Boolean) {
         playerSettingsDataStore.setAllowLargeTargetBuffer(enabled)

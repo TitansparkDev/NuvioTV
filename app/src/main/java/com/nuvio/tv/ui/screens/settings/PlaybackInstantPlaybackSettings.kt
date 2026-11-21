@@ -25,4 +25,16 @@ internal fun InstantPlaybackControls(settings: PlayerSettings, onUpdate: Playbac
         checked = settings.prefetchPrepareTopSource,
         onToggle = { onUpdate { setPrefetchPrepareTopSource(!settings.prefetchPrepareTopSource) } }
     )
+    SettingsToggleRow(
+        title = stringResource(R.string.instant_playback_fast_start),
+        subtitle = stringResource(R.string.instant_playback_fast_start_note),
+        checked = settings.autoPlayFastStart,
+        onToggle = { onUpdate { setAutoPlayFastStart(!settings.autoPlayFastStart) } }
+    )
+    SettingsToggleRow(
+        title = stringResource(R.string.instant_playback_continue_watching),
+        subtitle = stringResource(R.string.instant_playback_continue_watching_note),
+        checked = settings.prefetchContinueWatching,
+        onToggle = { onUpdate { setPrefetchContinueWatching(!settings.prefetchContinueWatching) } }
+    )
 }
