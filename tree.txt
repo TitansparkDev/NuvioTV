@@ -227,6 +227,7 @@ app/src/main/java/com/nuvio/tv/core/party/PartyModels.kt
 app/src/main/java/com/nuvio/tv/core/party/PartyRepository.kt
 app/src/main/java/com/nuvio/tv/core/party/PartySourceMatch.kt
 app/src/main/java/com/nuvio/tv/core/party/PartySync.kt
+app/src/main/java/com/nuvio/tv/core/player/AutoPlayEarlyDecision.kt
 app/src/main/java/com/nuvio/tv/core/player/Av1Hdr10PlusStripper.java
 app/src/main/java/com/nuvio/tv/core/player/BackgroundTrailerController.kt
 app/src/main/java/com/nuvio/tv/core/player/BitrateAwareLoadControl.kt
@@ -1459,6 +1460,7 @@ app/src/test/java/com/nuvio/tv/core/network/RealtimeSocketFactoryTest.kt
 app/src/test/java/com/nuvio/tv/core/network/ReceiveWindowTest.kt
 app/src/test/java/com/nuvio/tv/core/party/PartyStreamTest.kt
 app/src/test/java/com/nuvio/tv/core/party/PartySyncTest.kt
+app/src/test/java/com/nuvio/tv/core/player/AutoPlayEarlyDecisionTest.kt
 app/src/test/java/com/nuvio/tv/core/player/Av1Hdr10PlusStripperTest.kt
 app/src/test/java/com/nuvio/tv/core/player/BitrateAwareLoadControlTest.kt
 app/src/test/java/com/nuvio/tv/core/player/DolbyVisionBaseLayerPolicyTest.kt

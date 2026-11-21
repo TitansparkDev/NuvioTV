@@ -6,7 +6,10 @@ import com.nuvio.tv.domain.model.AddonStreams
 import com.nuvio.tv.domain.model.Stream
 import kotlinx.coroutines.flow.Flow
 
+data class StreamSearchProgress(val requestedSources: List<String>, val finishedSources: Set<String>)
+
 interface StreamRepository {
+    fun searchProgress(type: String, videoId: String, season: Int?, episode: Int?): StreamSearchProgress? = null
     /** Suspends local plugin work while playback owns the device, then resumes the same search. */
     fun setLocalPluginSearchPaused(paused: Boolean)
 
