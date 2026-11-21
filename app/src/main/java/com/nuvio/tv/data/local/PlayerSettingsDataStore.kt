@@ -309,6 +309,13 @@ enum class NightMode(val settingValue: String) {
 /**
  * Data class representing player settings
  */
+data class FastStreamingDefaults(
+    val parallelNetworkEnabled: Boolean = true,
+    val parallelConnections: Boolean = true,
+    val connectionCount: Int = 4,
+    val chunkSizeKb: Int = 4096
+)
+
 data class PlayerSettings(
     val playerPreference: PlayerPreference = PlayerPreference.INTERNAL,
     val internalPlayerEngine: InternalPlayerEngine = InternalPlayerEngine.EXOPLAYER,
@@ -453,13 +460,6 @@ data class PlayerSettings(
         get() = if (effectiveTunnelingEnabled) LibassRenderMode.OVERLAY else libassRenderMode
 
     companion object {
-        data class FastStreamingDefaults(
-            val parallelNetworkEnabled: Boolean = true,
-            val parallelConnections: Boolean = true,
-            val connectionCount: Int = 4,
-            val chunkSizeKb: Int = 4096
-        )
-
         fun fastStreamingDefaults() = FastStreamingDefaults()
         fun shouldApplyFastStreamingDefaults(migrationDone: Boolean): FastStreamingDefaults? =
             if (migrationDone) null else fastStreamingDefaults()
