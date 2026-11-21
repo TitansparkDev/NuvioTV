@@ -31,6 +31,28 @@ import androidx.media3.exoplayer.upstream.DefaultAllocatorNative
 import java.nio.ByteBuffer
 import java.util.LinkedHashMap
 
+internal object HostConnectionLimits {
+    private const val RECOVERY_MS = 30 * 60 * 1000L
+    internal var nowMs: () -> Long = { SystemClock.elapsedRealtime() }
+    private data class Entry(val limit: Int, val hitAt: Long)
+    private val entries = ConcurrentHashMap<String, Entry>()
+
+    @Synchronized fun limit(host: String?, configured: Int): Int {
+        val baseline = configured.coerceAtLeast(1)
+        val key = host?.lowercase() ?: return baseline
+        val entry = entries[key] ?: return baseline
+        if (nowMs() - entry.hitAt >= RECOVERY_MS) { entries.remove(key); return baseline }
+        return minOf(baseline, entry.limit)
+    }
+
+    @Synchronized fun noteRateLimit(host: String?, current: Int) {
+        val key = host?.lowercase() ?: return
+        entries[key] = Entry((current.coerceAtLeast(1) / 2).coerceAtLeast(1), nowMs())
+    }
+
+    @Synchronized internal fun clearForTests() = entries.clear()
+}
+
 @UnstableApi
 internal class ParallelRangeDataSource(
     private val upstreamFactory: OkHttpDataSource.Factory,

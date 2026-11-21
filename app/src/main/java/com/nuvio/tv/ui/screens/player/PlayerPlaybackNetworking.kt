@@ -55,6 +55,7 @@ internal object PlayerPlaybackNetworking {
         }
         OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            .connectionPool(okhttp3.ConnectionPool(8, 5, TimeUnit.MINUTES))
             .dns(IPv4FirstDns())
             .socketFactory(PlaybackSocketFactory)
             .eventListenerFactory(PlaybackConnectionEvents)
@@ -82,6 +83,7 @@ internal object PlayerPlaybackNetworking {
         }
         OkHttpClient.Builder()
             .dispatcher(dispatcher)
+            .connectionPool(okhttp3.ConnectionPool(8, 5, TimeUnit.MINUTES))
             .dns(IPv4FirstDns())
             .socketFactory(PlaybackSocketFactory)
             .eventListenerFactory(PlaybackConnectionEvents)
