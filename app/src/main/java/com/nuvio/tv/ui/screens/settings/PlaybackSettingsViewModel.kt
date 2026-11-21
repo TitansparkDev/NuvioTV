@@ -460,6 +460,9 @@ class PlaybackSettingsViewModel @Inject constructor(
     suspend fun setParallelNetworkEnabled(enabled: Boolean) {
         playerSettingsDataStore.setParallelNetworkEnabled(enabled)
     }
+    suspend fun setPrefetchMovieOnDetails(enabled: Boolean) = playerSettingsDataStore.setPrefetchMovieOnDetails(enabled)
+    suspend fun setPrefetchEpisodeOnDetails(enabled: Boolean) = playerSettingsDataStore.setPrefetchEpisodeOnDetails(enabled)
+    suspend fun setPrefetchPrepareTopSource(enabled: Boolean) = playerSettingsDataStore.setPrefetchPrepareTopSource(enabled)
 
     suspend fun setAllowLargeTargetBuffer(enabled: Boolean) {
         playerSettingsDataStore.setAllowLargeTargetBuffer(enabled)

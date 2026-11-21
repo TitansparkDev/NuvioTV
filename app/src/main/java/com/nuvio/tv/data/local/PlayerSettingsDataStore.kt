@@ -309,6 +309,13 @@ enum class NightMode(val settingValue: String) {
 /**
  * Data class representing player settings
  */
+data class FastStreamingDefaults(
+    val parallelNetworkEnabled: Boolean = true,
+    val parallelConnections: Boolean = true,
+    val connectionCount: Int = 4,
+    val chunkSizeKb: Int = 4096
+)
+
 data class PlayerSettings(
     val playerPreference: PlayerPreference = PlayerPreference.INTERNAL,
     val internalPlayerEngine: InternalPlayerEngine = InternalPlayerEngine.EXOPLAYER,
@@ -373,6 +380,9 @@ data class PlayerSettings(
     val streamAutoPlaySelectedAddons: Set<String> = emptySet(),
     val streamAutoPlaySelectedPlugins: Set<String> = emptySet(),
     val streamAutoPlayRegex: String = "",
+    val prefetchMovieOnDetails: Boolean = true,
+    val prefetchEpisodeOnDetails: Boolean = true,
+    val prefetchPrepareTopSource: Boolean = true,
     val postPlayRecommendationsEnabled: Boolean = true,
     val postPlayMovieThresholdPercent: Int = DEFAULT_POST_PLAY_MOVIE_THRESHOLD_PERCENT,
     val streamAutoPlayNextEpisodeEnabled: Boolean = false,
@@ -401,7 +411,7 @@ data class PlayerSettings(
 
     // Networking
     val bufferEngineEnabled: Boolean = false,
-    val parallelNetworkEnabled: Boolean = false,
+    val parallelNetworkEnabled: Boolean = true,
     /** When true the device memory budget caps the buffer; when false Target Buffer Size drives it. */
     val bufferBudgetManaged: Boolean = DEFAULT_BUFFER_BUDGET_MANAGED,
     /** When true, target buffer slider max is raised to 2GB regardless of device memory. */
@@ -450,6 +460,9 @@ data class PlayerSettings(
         get() = if (effectiveTunnelingEnabled) LibassRenderMode.OVERLAY else libassRenderMode
 
     companion object {
+        fun fastStreamingDefaults() = FastStreamingDefaults()
+        fun shouldApplyFastStreamingDefaults(migrationDone: Boolean): FastStreamingDefaults? =
+            if (migrationDone) null else fastStreamingDefaults()
         const val DEFAULT_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 30
         const val MIN_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 0
         const val MAX_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 180
@@ -495,9 +508,9 @@ data class PlayerSettings(
         const val MIN_VOD_CACHE_SIZE_MB = 100
         const val MAX_VOD_CACHE_SIZE_MB = 65_536
         val DEFAULT_VOD_CACHE_SIZE_MODE: VodCacheSizeMode = VodCacheSizeMode.AUTO
-        const val DEFAULT_USE_PARALLEL_CONNECTIONS = false
-        const val DEFAULT_PARALLEL_CONNECTION_COUNT = 2
-        const val DEFAULT_PARALLEL_CHUNK_SIZE_KB = 16 * 1024
+        const val DEFAULT_USE_PARALLEL_CONNECTIONS = true
+        const val DEFAULT_PARALLEL_CONNECTION_COUNT = 4
+        const val DEFAULT_PARALLEL_CHUNK_SIZE_KB = 4096
         const val MIN_PARALLEL_CONNECTION_COUNT = 2
         const val MAX_PARALLEL_CONNECTION_COUNT = 4
         const val MIN_PARALLEL_CHUNK_SIZE_KB = 256
@@ -732,6 +745,10 @@ class PlayerSettingsDataStore @Inject constructor(
     private val streamAutoPlaySelectedAddonsKey = stringSetPreferencesKey("stream_auto_play_selected_addons")
     private val streamAutoPlaySelectedPluginsKey = stringSetPreferencesKey("stream_auto_play_selected_plugins")
     private val streamAutoPlayRegexKey = stringPreferencesKey("stream_auto_play_regex")
+    private val prefetchMovieOnDetailsKey = booleanPreferencesKey("prefetch_movie_on_details")
+    private val prefetchEpisodeOnDetailsKey = booleanPreferencesKey("prefetch_episode_on_details")
+    private val prefetchPrepareTopSourceKey = booleanPreferencesKey("prefetch_prepare_top_source")
+    private val migrationFastStreamingDefaultsDoneKey = booleanPreferencesKey("migration_fast_streaming_defaults_done")
     private val postPlayRecommendationsEnabledKey = booleanPreferencesKey("post_play_recommendations_enabled")
     private val postPlayMovieThresholdPercentKey = intPreferencesKey("post_play_movie_threshold_percent")
     private val streamAutoPlayNextEpisodeEnabledKey = booleanPreferencesKey("stream_auto_play_next_episode_enabled")
@@ -835,6 +852,13 @@ class PlayerSettingsDataStore @Inject constructor(
 
     private suspend fun migrateProfile(profileId: Int) {
         factory.get(profileId, FEATURE).edit { prefs ->
+                PlayerSettings.shouldApplyFastStreamingDefaults(prefs[migrationFastStreamingDefaultsDoneKey] ?: false)?.let { defaults ->
+                    prefs[parallelNetworkEnabledKey] = defaults.parallelNetworkEnabled
+                    prefs[useParallelConnectionsKey] = defaults.parallelConnections
+                    prefs[parallelConnectionCountKey] = defaults.connectionCount
+                    prefs[parallelChunkSizeKbKey] = defaults.chunkSizeKb
+                    prefs[migrationFastStreamingDefaultsDoneKey] = true
+                }
                 val loadControlMigrated = prefs[migrationLoadControlDefaultsAlignedDoneKey] ?: false
                 if (!loadControlMigrated) {
                     val currentMin = prefs[minBufferMsKey]
@@ -1222,7 +1246,10 @@ class PlayerSettingsDataStore @Inject constructor(
                 vodCacheSizeMb = (prefs[vodCacheSizeMbKey] ?: PlayerSettings.DEFAULT_VOD_CACHE_SIZE_MB).coerceIn(PlayerSettings.MIN_VOD_CACHE_SIZE_MB, PlayerSettings.MAX_VOD_CACHE_SIZE_MB),
                 useParallelConnections = prefs[useParallelConnectionsKey] ?: PlayerSettings.DEFAULT_USE_PARALLEL_CONNECTIONS,
                 bufferEngineEnabled = prefs[bufferEngineEnabledKey] ?: false,
-                parallelNetworkEnabled = prefs[parallelNetworkEnabledKey] ?: false,
+                parallelNetworkEnabled = prefs[parallelNetworkEnabledKey] ?: true,
+                prefetchMovieOnDetails = prefs[prefetchMovieOnDetailsKey] ?: true,
+                prefetchEpisodeOnDetails = prefs[prefetchEpisodeOnDetailsKey] ?: true,
+                prefetchPrepareTopSource = prefs[prefetchPrepareTopSourceKey] ?: true,
                 allowLargeTargetBuffer = prefs[allowLargeTargetBufferKey] ?: PlayerSettings.DEFAULT_ALLOW_LARGE_TARGET_BUFFER,
                 bufferBudgetManaged = prefs[bufferBudgetManagedKey] ?: PlayerSettings.DEFAULT_BUFFER_BUDGET_MANAGED,
                 parallelConnectionCount = run {
@@ -1236,7 +1263,7 @@ class PlayerSettingsDataStore @Inject constructor(
                     if (savedKb != null) {
                         savedKb.coerceIn(PlayerSettings.MIN_PARALLEL_CHUNK_SIZE_KB, PlayerSettings.MAX_PARALLEL_CHUNK_SIZE_KB)
                     } else {
-                        val savedMb = (prefs[parallelChunkSizeMbKey] ?: 16).coerceIn(8, 128)
+                        val savedMb = (prefs[parallelChunkSizeMbKey] ?: 4).coerceIn(4, 128)
                         savedMb * 1024
                     }
                 },
@@ -2078,6 +2105,9 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setParallelNetworkEnabled(enabled: Boolean) {
         store().edit { it[parallelNetworkEnabledKey] = enabled }
     }
+    suspend fun setPrefetchMovieOnDetails(enabled: Boolean) { store().edit { it[prefetchMovieOnDetailsKey] = enabled } }
+    suspend fun setPrefetchEpisodeOnDetails(enabled: Boolean) { store().edit { it[prefetchEpisodeOnDetailsKey] = enabled } }
+    suspend fun setPrefetchPrepareTopSource(enabled: Boolean) { store().edit { it[prefetchPrepareTopSourceKey] = enabled } }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     suspend fun setAllowLargeTargetBuffer(enabled: Boolean) {

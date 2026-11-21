@@ -1134,6 +1134,7 @@ app/src/main/java/com/nuvio/tv/ui/screens/settings/NetworkSettingsScreen.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackAudioSettings.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackAutoPlaySettings.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackBufferNetworkSettings.kt
+app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackInstantPlaybackSettings.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackP2pSettings.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackPlayerSettings.kt
 app/src/main/java/com/nuvio/tv/ui/screens/settings/PlaybackSettingsModel.kt
@@ -1534,6 +1535,7 @@ app/src/test/java/com/nuvio/tv/data/local/CollectionsDataStoreSourceMigrationTes
 app/src/test/java/com/nuvio/tv/data/local/DeviceLocalPlayerPreferencesTest.kt
 app/src/test/java/com/nuvio/tv/data/local/DiscoverLocationMigrationTest.kt
 app/src/test/java/com/nuvio/tv/data/local/EpisodeShuffleStoreTest.kt
+app/src/test/java/com/nuvio/tv/data/local/PlayerSettingsInstantPlaybackTest.kt
 app/src/test/java/com/nuvio/tv/data/local/PlayerSettingsTimeoutMigrationTest.kt
 app/src/test/java/com/nuvio/tv/data/local/PlayerSettingsTimeoutPredicateTest.kt
 app/src/test/java/com/nuvio/tv/data/local/SubtitleStyleHdrOverrideTest.kt
