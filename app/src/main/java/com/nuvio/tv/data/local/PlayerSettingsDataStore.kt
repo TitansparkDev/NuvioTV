@@ -383,6 +383,8 @@ data class PlayerSettings(
     val prefetchMovieOnDetails: Boolean = true,
     val prefetchEpisodeOnDetails: Boolean = true,
     val prefetchPrepareTopSource: Boolean = true,
+    val autoPlayFastStart: Boolean = true,
+    val prefetchContinueWatching: Boolean = true,
     val postPlayRecommendationsEnabled: Boolean = true,
     val postPlayMovieThresholdPercent: Int = DEFAULT_POST_PLAY_MOVIE_THRESHOLD_PERCENT,
     val streamAutoPlayNextEpisodeEnabled: Boolean = false,
@@ -463,6 +465,7 @@ data class PlayerSettings(
         fun fastStreamingDefaults() = FastStreamingDefaults()
         fun shouldApplyFastStreamingDefaults(migrationDone: Boolean): FastStreamingDefaults? =
             if (migrationDone) null else fastStreamingDefaults()
+        fun shouldEnableReuseLastLink(migrationDone: Boolean): Boolean = !migrationDone
         const val DEFAULT_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 30
         const val MIN_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 0
         const val MAX_NEXT_EPISODE_PREFETCH_LEAD_SECONDS = 180
@@ -748,7 +751,10 @@ class PlayerSettingsDataStore @Inject constructor(
     private val prefetchMovieOnDetailsKey = booleanPreferencesKey("prefetch_movie_on_details")
     private val prefetchEpisodeOnDetailsKey = booleanPreferencesKey("prefetch_episode_on_details")
     private val prefetchPrepareTopSourceKey = booleanPreferencesKey("prefetch_prepare_top_source")
+    private val autoPlayFastStartKey = booleanPreferencesKey("autoplay_fast_start")
+    private val prefetchContinueWatchingKey = booleanPreferencesKey("prefetch_continue_watching")
     private val migrationFastStreamingDefaultsDoneKey = booleanPreferencesKey("migration_fast_streaming_defaults_done")
+    private val migrationReuseLastLinkEnabledDoneKey = booleanPreferencesKey("migration_reuse_last_link_enabled_done")
     private val postPlayRecommendationsEnabledKey = booleanPreferencesKey("post_play_recommendations_enabled")
     private val postPlayMovieThresholdPercentKey = intPreferencesKey("post_play_movie_threshold_percent")
     private val streamAutoPlayNextEpisodeEnabledKey = booleanPreferencesKey("stream_auto_play_next_episode_enabled")
@@ -852,6 +858,10 @@ class PlayerSettingsDataStore @Inject constructor(
 
     private suspend fun migrateProfile(profileId: Int) {
         factory.get(profileId, FEATURE).edit { prefs ->
+                if (PlayerSettings.shouldEnableReuseLastLink(prefs[migrationReuseLastLinkEnabledDoneKey] ?: false)) {
+                    prefs[streamReuseLastLinkEnabledKey] = true
+                    prefs[migrationReuseLastLinkEnabledDoneKey] = true
+                }
                 PlayerSettings.shouldApplyFastStreamingDefaults(prefs[migrationFastStreamingDefaultsDoneKey] ?: false)?.let { defaults ->
                     prefs[parallelNetworkEnabledKey] = defaults.parallelNetworkEnabled
                     prefs[useParallelConnectionsKey] = defaults.parallelConnections
@@ -1234,7 +1244,7 @@ class PlayerSettingsDataStore @Inject constructor(
                     min = 0f,
                     max = 3.5f
                 ),
-                streamReuseLastLinkEnabled = prefs[streamReuseLastLinkEnabledKey] ?: false,
+                streamReuseLastLinkEnabled = prefs[streamReuseLastLinkEnabledKey] ?: true,
                 streamReuseLastLinkCacheHours = (prefs[streamReuseLastLinkCacheHoursKey] ?: 24).coerceIn(1, 168),
                 externalPlayerForwardSubtitles = prefs[externalPlayerForwardSubtitlesKey] ?: false,
                 externalPlayerSendSkipSegments = prefs[externalPlayerSendSkipSegmentsKey] ?: false,
@@ -1250,6 +1260,8 @@ class PlayerSettingsDataStore @Inject constructor(
                 prefetchMovieOnDetails = prefs[prefetchMovieOnDetailsKey] ?: true,
                 prefetchEpisodeOnDetails = prefs[prefetchEpisodeOnDetailsKey] ?: true,
                 prefetchPrepareTopSource = prefs[prefetchPrepareTopSourceKey] ?: true,
+                autoPlayFastStart = prefs[autoPlayFastStartKey] ?: true,
+                prefetchContinueWatching = prefs[prefetchContinueWatchingKey] ?: true,
                 allowLargeTargetBuffer = prefs[allowLargeTargetBufferKey] ?: PlayerSettings.DEFAULT_ALLOW_LARGE_TARGET_BUFFER,
                 bufferBudgetManaged = prefs[bufferBudgetManagedKey] ?: PlayerSettings.DEFAULT_BUFFER_BUDGET_MANAGED,
                 parallelConnectionCount = run {
@@ -2108,6 +2120,8 @@ class PlayerSettingsDataStore @Inject constructor(
     suspend fun setPrefetchMovieOnDetails(enabled: Boolean) { store().edit { it[prefetchMovieOnDetailsKey] = enabled } }
     suspend fun setPrefetchEpisodeOnDetails(enabled: Boolean) { store().edit { it[prefetchEpisodeOnDetailsKey] = enabled } }
     suspend fun setPrefetchPrepareTopSource(enabled: Boolean) { store().edit { it[prefetchPrepareTopSourceKey] = enabled } }
+    suspend fun setAutoPlayFastStart(enabled: Boolean) { store().edit { it[autoPlayFastStartKey] = enabled } }
+    suspend fun setPrefetchContinueWatching(enabled: Boolean) { store().edit { it[prefetchContinueWatchingKey] = enabled } }
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     suspend fun setAllowLargeTargetBuffer(enabled: Boolean) {
